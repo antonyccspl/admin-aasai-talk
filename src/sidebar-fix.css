@@ -1,0 +1,1 @@
+.sidebar{overflow-y:auto;overscroll-behavior:contain}.sidebar-bottom{position:sticky;bottom:0;padding-top:14px;background:#201e1d}.logout-button{display:block!important;min-height:42px}@media(max-width:620px){.sidebar{overflow:visible}.sidebar-bottom{position:static;padding-top:0;background:transparent}.logout-button{display:block!important}}
