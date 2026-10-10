@@ -71,10 +71,22 @@ function App() {
   }, []);
   useEffect(() => {
     if (!session) { setAccess("denied"); return; }
-    setAccess("loading");
+    // A token refresh is normal when the tab regains focus. Keep a portal that
+    // is already authorised on screen while its role is revalidated.
+    if (!adminInfo) setAccess("loading");
     void fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-portal`, { method: "POST", headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${session.access_token}` } })
-      .then(async (response) => response.ok ? response.json() : Promise.reject(await response.json()))
-      .then((data) => { setAdminInfo(data.admin); setAccess("allowed"); }).catch(() => { setAdminInfo(null); setAccess("denied"); });
+      .then(async (response) => {
+        if (response.ok) return response.json();
+        throw { status: response.status };
+      })
+      .then((data) => { setAdminInfo(data.admin); setAccess("allowed"); })
+      .catch((cause: unknown) => {
+        const status = cause && typeof cause === "object" && "status" in cause && typeof cause.status === "number" ? cause.status : 0;
+        // A real authentication/authorisation rejection must still close the
+        // portal. Temporary network errors must not blank an active session.
+        if (status === 401 || status === 403 || !adminInfo) { setAdminInfo(null); setAccess("denied"); }
+        else setAccess("allowed");
+      });
   }, [session]);
   useEffect(() => {
     const restoreSection = () => setSection(sectionFromUrl());
