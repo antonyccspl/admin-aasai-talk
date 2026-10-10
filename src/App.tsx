@@ -30,6 +30,7 @@ import "./performance-alignment.css";
 import "./report-center.css";
 import "./offers.css";
 import "./compact-portal.css";
+import "./host-onboarding.css";
 
 type Section =
   | "Overview"
@@ -3470,7 +3471,7 @@ function HostOnboardingModal({
         aria-modal="true"
         aria-label="Assisted Host setup"
         onMouseDown={(event) => event.stopPropagation()}
-        style={{ maxWidth: 700 }}
+        style={{ maxWidth: 640 }}
       >
         <header>
           <div>
@@ -3481,13 +3482,21 @@ function HostOnboardingModal({
             ×
           </button>
         </header>
-        <div className="detail-card" style={{ gap: 16 }}>
-          <p className="payout-review-help">
-            Record only details the member has provided and you have checked.
-            PAN and Aadhaar are stored as protected verification references;
-            only their final four characters are retained.
-          </p>
-          <div className="host-onboarding-grid">
+        <div className="detail-card assisted-host-onboarding">
+          <div className="host-onboarding-notice">
+            <span aria-hidden="true">◈</span>
+            <p>
+              Record only details the member has provided and you have checked.
+              PAN and Aadhaar are protected verification references; only their
+              final four characters are retained.
+            </p>
+          </div>
+          <section className="host-onboarding-section" aria-labelledby="verification-heading">
+            <div className="host-onboarding-section-heading">
+              <p className="eyebrow">01 · IDENTITY VERIFICATION</p>
+              <h3 id="verification-heading">Confirm the Host&apos;s identity</h3>
+            </div>
+            <div className="host-onboarding-grid">
             <label className="auth-field">
               <span>PAN number</span>
               <input
@@ -3509,34 +3518,40 @@ function HostOnboardingModal({
                 maxLength={12}
               />
             </label>
-          </div>
-          <label className="auth-field">
-            <span>Account holder name</span>
-            <input
-              value={holder}
-              onChange={(event) => setHolder(event.target.value)}
-              placeholder="Name on bank or UPI account"
-            />
-          </label>
-          <div className="record-actions">
+            </div>
+          </section>
+          <section className="host-onboarding-section" aria-labelledby="payout-heading">
+            <div className="host-onboarding-section-heading">
+              <p className="eyebrow">02 · PAYOUT DESTINATION</p>
+              <h3 id="payout-heading">Where should earnings be sent?</h3>
+            </div>
+            <label className="auth-field">
+              <span>Account holder name</span>
+              <input
+                value={holder}
+                onChange={(event) => setHolder(event.target.value)}
+                placeholder="Name on bank or UPI account"
+              />
+            </label>
+            <div className="payout-method-picker" role="group" aria-label="Payout method">
             <button
-              className={method === "upi" ? "primary-button" : "outline-button"}
+              className={method === "upi" ? "selected" : ""}
               type="button"
               onClick={() => setMethod("upi")}
             >
-              UPI ID
+              <strong>UPI ID</strong>
+              <span>Instantly payable</span>
             </button>
             <button
-              className={
-                method === "bank" ? "primary-button" : "outline-button"
-              }
+              className={method === "bank" ? "selected" : ""}
               type="button"
               onClick={() => setMethod("bank")}
             >
-              Bank account
+              <strong>Bank account</strong>
+              <span>Account + IFSC</span>
             </button>
-          </div>
-          {method === "upi" ? (
+            </div>
+            {method === "upi" ? (
             <label className="auth-field">
               <span>Verified UPI ID</span>
               <input
@@ -3545,7 +3560,7 @@ function HostOnboardingModal({
                 placeholder="name@bank"
               />
             </label>
-          ) : (
+            ) : (
             <div className="host-onboarding-grid">
               <label className="auth-field">
                 <span>Bank account number</span>
@@ -3569,24 +3584,31 @@ function HostOnboardingModal({
                 />
               </label>
             </div>
-          )}
-          <label className="payout-confirm-check">
+            )}
+          </section>
+          <section className="host-onboarding-section host-onboarding-confirm" aria-labelledby="approval-heading">
+            <div className="host-onboarding-section-heading">
+              <p className="eyebrow">03 · FINAL CHECK</p>
+              <h3 id="approval-heading">Review before saving</h3>
+            </div>
+            <label className="payout-confirm-check">
             <input
               type="checkbox"
               checked={verified}
               onChange={(event) => setVerified(event.target.checked)}
             />{" "}
             I have verified this payout destination with the Host.
-          </label>
-          <label className="payout-confirm-check">
+            </label>
+            <label className="payout-confirm-check">
             <input
               type="checkbox"
               checked={approve}
               onChange={(event) => setApprove(event.target.checked)}
             />{" "}
             Approve this member as a Host now.
-          </label>
-          <div className="record-actions">
+            </label>
+          </section>
+          <div className="host-onboarding-footer">
             <button
               className="outline-button"
               onClick={onClose}
