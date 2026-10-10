@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 import "./App.css";
@@ -25,67 +31,155 @@ import "./report-center.css";
 import "./offers.css";
 import "./compact-portal.css";
 
-type Section = "Overview" | "Performance" | "Hosts" | "Payouts" | "Payments" | "Users" | "Reports" | "Coin packs" | "Admin access" | "Audit log";
-type AdminInfo = { id: string; email: string; role: "super_admin" | "finance_admin" | "moderator" | "support"; pages: Section[] };
-type AdminAccount = { id: string; email: string; created_at: string; email_confirmed_at: string | null; role: "super_admin" | "finance_admin" | "moderator" | "support" | null; active: boolean; page_access: Section[] };
+type Section =
+  | "Overview"
+  | "Performance"
+  | "Hosts"
+  | "Payouts"
+  | "Payments"
+  | "Users"
+  | "Reports"
+  | "Support"
+  | "Coin packs"
+  | "Admin access"
+  | "Audit log";
+type AdminInfo = {
+  id: string;
+  email: string;
+  role: "super_admin" | "finance_admin" | "moderator" | "support";
+  pages: Section[];
+};
+type AdminAccount = {
+  id: string;
+  email: string;
+  created_at: string;
+  email_confirmed_at: string | null;
+  role: "super_admin" | "finance_admin" | "moderator" | "support" | null;
+  active: boolean;
+  page_access: Section[];
+};
+type PayoutAction = {
+  item: Record<string, unknown>;
+  mode: "review" | "complete" | "reject" | "failed";
+};
 
 const navigation: { name: Section; icon: string; count?: string }[] = [
-  { name: "Overview", icon: "▦" }, { name: "Performance", icon: "▥" }, { name: "Hosts", icon: "♙" },
-  { name: "Payouts", icon: "₹" }, { name: "Payments", icon: "◫" }, { name: "Users", icon: "◎" },
-  { name: "Reports", icon: "◈" }, { name: "Coin packs", icon: "◌" }, { name: "Admin access", icon: "◉" }, { name: "Audit log", icon: "◷" },
+  { name: "Overview", icon: "▦" },
+  { name: "Performance", icon: "▥" },
+  { name: "Hosts", icon: "♙" },
+  { name: "Payouts", icon: "₹" },
+  { name: "Payments", icon: "◫" },
+  { name: "Users", icon: "◎" },
+  { name: "Reports", icon: "◈" },
+  { name: "Support", icon: "?" },
+  { name: "Coin packs", icon: "◌" },
+  { name: "Admin access", icon: "◉" },
+  { name: "Audit log", icon: "◷" },
 ];
 const rolePages: Record<AdminInfo["role"], Section[]> = {
-  super_admin: ["Overview", "Performance", "Hosts", "Payouts", "Payments", "Users", "Reports", "Coin packs", "Admin access", "Audit log"],
+  super_admin: [
+    "Overview",
+    "Performance",
+    "Hosts",
+    "Payouts",
+    "Payments",
+    "Users",
+    "Reports",
+    "Support",
+    "Coin packs",
+    "Admin access",
+    "Audit log",
+  ],
   finance_admin: ["Overview", "Payouts", "Payments", "Coin packs"],
-  moderator: ["Overview", "Hosts", "Users", "Reports"],
-  support: ["Overview", "Users"],
+  moderator: ["Overview", "Hosts", "Users", "Reports", "Support"],
+  support: ["Overview", "Users", "Support"],
 };
 
 function sectionFromUrl(): Section {
   const page = new URLSearchParams(window.location.search).get("page");
-  return navigation.some((item) => item.name === page) ? page as Section : "Overview";
+  return navigation.some((item) => item.name === page)
+    ? (page as Section)
+    : "Overview";
 }
 
 function persistSection(section: Section) {
   const url = new URL(window.location.href);
   if (section === "Overview") url.searchParams.delete("page");
   else url.searchParams.set("page", section);
-  window.history.replaceState({ page: section }, "", `${url.pathname}${url.search}${url.hash}`);
+  window.history.replaceState(
+    { page: section },
+    "",
+    `${url.pathname}${url.search}${url.hash}`,
+  );
 }
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
-  const [access, setAccess] = useState<"loading" | "allowed" | "denied">("loading");
+  const [access, setAccess] = useState<"loading" | "allowed" | "denied">(
+    "loading",
+  );
   const [adminInfo, setAdminInfo] = useState<AdminInfo | null>(null);
   const [section, setSection] = useState<Section>(sectionFromUrl);
   const [search, setSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<Record<string, unknown>[]>([]);
+  const [searchResults, setSearchResults] = useState<Record<string, unknown>[]>(
+    [],
+  );
   const [signingOut, setSigningOut] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
-  const sectionTitle = useMemo(() => section === "Overview" ? "Operations overview" : section, [section]);
+  const sectionTitle = useMemo(
+    () => (section === "Overview" ? "Operations overview" : section),
+    [section],
+  );
   useEffect(() => {
     if (!supabaseConfigured) return setAccess("denied");
-    void supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
+    void supabase.auth
+      .getSession()
+      .then(({ data }) => setSession(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, nextSession) => setSession(nextSession),
+    );
     return () => listener.subscription.unsubscribe();
   }, []);
   useEffect(() => {
-    if (!session) { setAccess("denied"); return; }
+    if (!session) {
+      setAccess("denied");
+      return;
+    }
     // A token refresh is normal when the tab regains focus. Keep a portal that
     // is already authorised on screen while its role is revalidated.
     if (!adminInfo) setAccess("loading");
-    void fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-portal`, { method: "POST", headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${session.access_token}` } })
+    void fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-portal`,
+      {
+        method: "POST",
+        headers: {
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      },
+    )
       .then(async (response) => {
         if (response.ok) return response.json();
         throw { status: response.status };
       })
-      .then((data) => { setAdminInfo(data.admin); setAccess("allowed"); })
+      .then((data) => {
+        setAdminInfo(data.admin);
+        setAccess("allowed");
+      })
       .catch((cause: unknown) => {
-        const status = cause && typeof cause === "object" && "status" in cause && typeof cause.status === "number" ? cause.status : 0;
+        const status =
+          cause &&
+          typeof cause === "object" &&
+          "status" in cause &&
+          typeof cause.status === "number"
+            ? cause.status
+            : 0;
         // A real authentication/authorisation rejection must still close the
         // portal. Temporary network errors must not blank an active session.
-        if (status === 401 || status === 403 || !adminInfo) { setAdminInfo(null); setAccess("denied"); }
-        else setAccess("allowed");
+        if (status === 401 || status === 403 || !adminInfo) {
+          setAdminInfo(null);
+          setAccess("denied");
+        } else setAccess("allowed");
       });
   }, [session]);
   useEffect(() => {
@@ -93,25 +187,194 @@ function App() {
     window.addEventListener("popstate", restoreSection);
     return () => window.removeEventListener("popstate", restoreSection);
   }, []);
-  useEffect(() => { persistSection(section); }, [section]);
   useEffect(() => {
-    if (access === "allowed" && adminInfo && !adminInfo.pages.includes(section)) setSection("Overview");
+    persistSection(section);
+  }, [section]);
+  useEffect(() => {
+    if (access === "allowed" && adminInfo && !adminInfo.pages.includes(section))
+      setSection("Overview");
   }, [access, adminInfo, section]);
-  useEffect(() => { if (!session || search.trim().length < 2) { setSearchResults([]); return; } const timeout = window.setTimeout(() => { void adminRequest(session, "admin_search", { query: search }).then((data) => setSearchResults(data.items || [])).catch(() => setSearchResults([])); }, 220); return () => window.clearTimeout(timeout); }, [session, search]);
-  if (!supabaseConfigured) return <AccessCard title="Admin portal needs configuration" message="Copy .env.example to .env and add the same Supabase URL and publishable key used by Aasai Talk. Never add the service-role key." />;
+  useEffect(() => {
+    if (!session || search.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      void adminRequest(session, "admin_search", { query: search })
+        .then((data) => setSearchResults(data.items || []))
+        .catch(() => setSearchResults([]));
+    }, 220);
+    return () => window.clearTimeout(timeout);
+  }, [session, search]);
+  if (!supabaseConfigured)
+    return (
+      <AccessCard
+        title="Admin portal needs configuration"
+        message="Copy .env.example to .env and add the same Supabase URL and publishable key used by Aasai Talk. Never add the service-role key."
+      />
+    );
   if (!session) return <Login />;
-  if (access === "loading") return <AccessCard title="Checking secure access" message="Verifying your administrator role on the server…" />;
-  if (access === "denied") return <AccessCard title="Admin access not granted" message="This account has not been approved by a Super Admin yet." />;
-  const logout = async () => { setSigningOut(true); await supabase.auth.signOut(); setAdminInfo(null); setSession(null); setAccess("denied"); setSigningOut(false); };
-  return <main className={`admin-shell ${navigationOpen ? "navigation-open" : ""}`}>
-    <button className="mobile-nav-backdrop" aria-label="Close navigation" onClick={() => setNavigationOpen(false)} />
-    <aside className="sidebar"><div className="brand"><span className="brand-mark">A</span><span>Aasai Talk</span></div><div className="portal-label">ADMIN PORTAL</div><nav aria-label="Admin sections">
-      {navigation.filter((item) => adminInfo?.pages.includes(item.name)).map((item) => <button key={item.name} className={`nav-item ${section === item.name ? "selected" : ""}`} onClick={() => { setSection(item.name); setNavigationOpen(false); }}><span className="nav-icon">{item.icon}</span><span>{item.name}</span>{item.count && <span className="nav-count">{item.count}</span>}</button>)}
-    </nav><div className="sidebar-bottom"><div className="sidebar-footer"><span className="status-dot" />Secure server actions only</div><button className="logout-button" onClick={() => void logout()} disabled={signingOut}>{signingOut ? "Logging out…" : "↪  Log out"}</button></div></aside>
-    <section className="content"><header className="topbar"><div className="page-title"><button className="mobile-menu-button" aria-label="Open navigation" aria-expanded={navigationOpen} onClick={() => setNavigationOpen(true)}>☰</button><div><p className="eyebrow">AASAI TALK · ADMIN</p><h1>{sectionTitle}</h1></div></div><div className="topbar-actions"><div className="global-search"><label className="search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search users, Hosts, payouts…" aria-label="Search portal records" /></label>{searchResults.length > 0 && <div className="search-results" role="listbox">{searchResults.map((result,index)=><button key={`${String(result.kind)}-${String(result.query)}-${index}`} onClick={() => { setSection(result.section as Section); setSearch(String(result.query || "")); setSearchResults([]); }}><span>{String(result.kind)}</span><strong>{String(result.title)}</strong><small>{String(result.subtitle)}</small></button>)}</div>}</div><div className="admin-identity" title={adminInfo?.role === "super_admin" ? "Signed in as Super Admin" : "Signed in as Staff Admin"}><span className="admin-avatar">{adminInfo?.role === "super_admin" ? "SA" : "AD"}</span><span className="admin-role-label">{adminInfo?.role === "super_admin" ? "Super Admin" : "Staff Admin"}</span></div></div></header>
-      {section === "Overview" ? <Overview key={section} session={session} onNavigate={setSection} /> : section === "Performance" ? <PerformanceReports key={section} session={session} /> : section === "Admin access" && adminInfo?.role === "super_admin" ? <AdminAccess key={section} session={session} /> : section === "Coin packs" ? <SpecialOffers key={section} session={session} /> : ["Hosts", "Payouts", "Payments", "Users", "Reports", "Audit log"].includes(section) ? <LiveWorkspace key={section} section={section as LiveSection} session={session} query={search} /> : <QueuePage section={section} query={search} />}
-    </section>
-  </main>;
+  if (access === "loading")
+    return (
+      <AccessCard
+        title="Checking secure access"
+        message="Verifying your administrator role on the server…"
+      />
+    );
+  if (access === "denied")
+    return (
+      <AccessCard
+        title="Admin access not granted"
+        message="This account has not been approved by a Super Admin yet."
+      />
+    );
+  const logout = async () => {
+    setSigningOut(true);
+    await supabase.auth.signOut();
+    setAdminInfo(null);
+    setSession(null);
+    setAccess("denied");
+    setSigningOut(false);
+  };
+  return (
+    <main className={`admin-shell ${navigationOpen ? "navigation-open" : ""}`}>
+      <button
+        className="mobile-nav-backdrop"
+        aria-label="Close navigation"
+        onClick={() => setNavigationOpen(false)}
+      />
+      <aside className="sidebar">
+        <div className="brand">
+          <span className="brand-mark">A</span>
+          <span>Aasai Talk</span>
+        </div>
+        <div className="portal-label">ADMIN PORTAL</div>
+        <nav aria-label="Admin sections">
+          {navigation
+            .filter((item) => adminInfo?.pages.includes(item.name))
+            .map((item) => (
+              <button
+                key={item.name}
+                className={`nav-item ${section === item.name ? "selected" : ""}`}
+                onClick={() => {
+                  setSection(item.name);
+                  setNavigationOpen(false);
+                }}
+              >
+                <span className="nav-icon">{item.icon}</span>
+                <span>{item.name}</span>
+                {item.count && <span className="nav-count">{item.count}</span>}
+              </button>
+            ))}
+        </nav>
+        <div className="sidebar-bottom">
+          <div className="sidebar-footer">
+            <span className="status-dot" />
+            Secure server actions only
+          </div>
+          <button
+            className="logout-button"
+            onClick={() => void logout()}
+            disabled={signingOut}
+          >
+            {signingOut ? "Logging out…" : "↪  Log out"}
+          </button>
+        </div>
+      </aside>
+      <section className="content">
+        <header className="topbar">
+          <div className="page-title">
+            <button
+              className="mobile-menu-button"
+              aria-label="Open navigation"
+              aria-expanded={navigationOpen}
+              onClick={() => setNavigationOpen(true)}
+            >
+              ☰
+            </button>
+            <div>
+              <p className="eyebrow">AASAI TALK · ADMIN</p>
+              <h1>{sectionTitle}</h1>
+            </div>
+          </div>
+          <div className="topbar-actions">
+            <div className="global-search">
+              <label className="search">
+                <span>⌕</span>
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search users, Hosts, payouts…"
+                  aria-label="Search portal records"
+                />
+              </label>
+              {searchResults.length > 0 && (
+                <div className="search-results" role="listbox">
+                  {searchResults.map((result, index) => (
+                    <button
+                      key={`${String(result.kind)}-${String(result.query)}-${index}`}
+                      onClick={() => {
+                        setSection(result.section as Section);
+                        setSearch(String(result.query || ""));
+                        setSearchResults([]);
+                      }}
+                    >
+                      <span>{String(result.kind)}</span>
+                      <strong>{String(result.title)}</strong>
+                      <small>{String(result.subtitle)}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div
+              className="admin-identity"
+              title={
+                adminInfo?.role === "super_admin"
+                  ? "Signed in as Super Admin"
+                  : "Signed in as Staff Admin"
+              }
+            >
+              <span className="admin-avatar">
+                {adminInfo?.role === "super_admin" ? "SA" : "AD"}
+              </span>
+              <span className="admin-role-label">
+                {adminInfo?.role === "super_admin"
+                  ? "Super Admin"
+                  : "Staff Admin"}
+              </span>
+            </div>
+          </div>
+        </header>
+        {section === "Overview" ? (
+          <Overview key={section} session={session} onNavigate={setSection} />
+        ) : section === "Performance" ? (
+          <PerformanceReports key={section} session={session} />
+        ) : section === "Admin access" && adminInfo?.role === "super_admin" ? (
+          <AdminAccess key={section} session={session} />
+        ) : section === "Coin packs" ? (
+          <SpecialOffers key={section} session={session} />
+        ) : [
+            "Hosts",
+            "Payouts",
+            "Payments",
+            "Users",
+            "Reports",
+            "Support",
+            "Audit log",
+          ].includes(section) ? (
+          <LiveWorkspace
+            key={section}
+            section={section as LiveSection}
+            session={session}
+            query={search}
+          />
+        ) : (
+          <QueuePage section={section} query={search} />
+        )}
+      </section>
+    </main>
+  );
 }
 
 function Login() {
@@ -123,7 +386,8 @@ function Login() {
   const [action, setAction] = useState<"sign-in" | null>(null);
   const busy = action !== null;
   const signIn = async () => {
-    setAction("sign-in"); setMessage("");
+    setAction("sign-in");
+    setMessage("");
     const result = await supabase.auth.signInWithPassword({ email, password });
     setAction(null);
     setMessage(result.error ? result.error.message : "Signed in successfully.");
@@ -131,24 +395,378 @@ function Login() {
   const passwordIsValid = password.length >= 8;
   const emailIsValid = /^\S+@\S+\.\S+$/.test(email);
   const emailError = emailTouched && !emailIsValid;
-  return <div className="access-page"><section className="access-card login-card"><div className="login-brand"><span className="brand-mark">A</span><div><p className="eyebrow">AASAI TALK</p><span>Secure admin portal</span></div></div><h1>Welcome back</h1><p className="login-intro">Sign in with the admin account created by your Super Admin.</p><form autoComplete="off" onSubmit={(event) => { event.preventDefault(); setEmailTouched(true); if (emailIsValid) void signIn(); }}><label className="auth-field"><span>Admin email</span><input value={email} onChange={(event) => setEmail(event.target.value.trimStart())} onBlur={() => setEmailTouched(true)} placeholder="name@example.com" type="email" inputMode="email" autoComplete="off" aria-invalid={emailError} required disabled={busy} />{emailError && <small className="field-error">Enter a valid email address.</small>}</label><label className="auth-field"><span>Password</span><span className="password-control"><input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" type={showPassword ? "text" : "password"} autoComplete="off" minLength={8} required disabled={busy} /><button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} disabled={busy}>{showPassword ? <EyeOffIcon /> : <EyeIcon />}</button></span></label><p className="password-help">Your access is based on the role and pages assigned by the Super Admin.</p><button className="primary-button access-button" type="submit" disabled={busy || !emailIsValid || !passwordIsValid}>{action === "sign-in" ? <><span className="button-loader" aria-hidden="true" />Logging in…</> : "Login"}</button></form>{message && <p className="login-message" role="status" aria-live="polite">{message}</p>}<p className="login-footer">Protected access · Actions are audit logged</p></section></div>;
+  return (
+    <div className="access-page">
+      <section className="access-card login-card">
+        <div className="login-brand">
+          <span className="brand-mark">A</span>
+          <div>
+            <p className="eyebrow">AASAI TALK</p>
+            <span>Secure admin portal</span>
+          </div>
+        </div>
+        <h1>Welcome back</h1>
+        <p className="login-intro">
+          Sign in with the admin account created by your Super Admin.
+        </p>
+        <form
+          autoComplete="off"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setEmailTouched(true);
+            if (emailIsValid) void signIn();
+          }}
+        >
+          <label className="auth-field">
+            <span>Admin email</span>
+            <input
+              value={email}
+              onChange={(event) => setEmail(event.target.value.trimStart())}
+              onBlur={() => setEmailTouched(true)}
+              placeholder="name@example.com"
+              type="email"
+              inputMode="email"
+              autoComplete="off"
+              aria-invalid={emailError}
+              required
+              disabled={busy}
+            />
+            {emailError && (
+              <small className="field-error">
+                Enter a valid email address.
+              </small>
+            )}
+          </label>
+          <label className="auth-field">
+            <span>Password</span>
+            <span className="password-control">
+              <input
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Enter your password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="off"
+                minLength={8}
+                required
+                disabled={busy}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+                disabled={busy}
+              >
+                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </span>
+          </label>
+          <p className="password-help">
+            Your access is based on the role and pages assigned by the Super
+            Admin.
+          </p>
+          <button
+            className="primary-button access-button"
+            type="submit"
+            disabled={busy || !emailIsValid || !passwordIsValid}
+          >
+            {action === "sign-in" ? (
+              <>
+                <span className="button-loader" aria-hidden="true" />
+                Logging in…
+              </>
+            ) : (
+              "Login"
+            )}
+          </button>
+        </form>
+        {message && (
+          <p className="login-message" role="status" aria-live="polite">
+            {message}
+          </p>
+        )}
+        <p className="login-footer">
+          Protected access · Actions are audit logged
+        </p>
+      </section>
+    </div>
+  );
 }
-function AccessCard({ title, message }: { title: string; message: string }) { return <div className="access-page"><section className="access-card"><span className="brand-mark">A</span><p className="eyebrow">AASAI TALK · SECURE ADMIN</p><h1>{title}</h1><p>{message}</p>{title === "Checking secure access" && <PortalLoader label="Verifying access" compact />}</section></div>; }
-function PortalLoader({ label = "Loading live data", compact = false }: { label?: string; compact?: boolean }) { return <div className={`portal-loader ${compact ? "compact" : ""}`} role="status" aria-live="polite"><span className="loader-mark"><i /><i /><i /></span><div><strong>{label}</strong><small>Securely connecting to Aasai Talk</small></div></div>; }
+function AccessCard({ title, message }: { title: string; message: string }) {
+  return (
+    <div className="access-page">
+      <section className="access-card">
+        <span className="brand-mark">A</span>
+        <p className="eyebrow">AASAI TALK · SECURE ADMIN</p>
+        <h1>{title}</h1>
+        <p>{message}</p>
+        {title === "Checking secure access" && (
+          <PortalLoader label="Verifying access" compact />
+        )}
+      </section>
+    </div>
+  );
+}
+function PortalLoader({
+  label = "Loading live data",
+  compact = false,
+}: {
+  label?: string;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={`portal-loader ${compact ? "compact" : ""}`}
+      role="status"
+      aria-live="polite"
+    >
+      <span className="loader-mark">
+        <i />
+        <i />
+        <i />
+      </span>
+      <div>
+        <strong>{label}</strong>
+        <small>Securely connecting to Aasai Talk</small>
+      </div>
+    </div>
+  );
+}
 
-function Overview({ session, onNavigate }: { session: Session; onNavigate: (section: Section) => void }) {
+function Overview({
+  session,
+  onNavigate,
+}: {
+  session: Session;
+  onNavigate: (section: Section) => void;
+}) {
   const [metrics, setMetrics] = useState<Record<string, number> | null>(null);
-  const [range, setRange] = useState<"7" | "30" | "90" | "all" | "custom">("30");
+  const [range, setRange] = useState<"7" | "30" | "90" | "all" | "custom">(
+    "30",
+  );
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [error, setError] = useState("");
-  useEffect(() => { if (range === "custom" && (!startDate || !endDate)) return; setMetrics(null); void (async () => { try { const response = await adminRequest(session, "dashboard", range === "all" ? { all_time: true } : range === "custom" ? { start_date: startDate, end_date: endDate } : { days: Number(range) }); setMetrics(response.metrics || {}); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load live dashboard data."); } })(); }, [session, range, startDate, endDate]);
-  if (!metrics && !error) return <section className="panel page-loader-panel"><PortalLoader label="Preparing your operations overview" /></section>;
-  const live = metrics || {}; const pending = (live.hosts_pending || 0) + (live.payouts_pending || 0);
-  const queue = [["Host applications", `${live.hosts_pending ?? "…"} awaiting review`, "Review Hosts", "Hosts"], ["Withdrawal requests", `${live.payouts_pending ?? "…"} awaiting finance review`, "Review payouts", "Payouts"], ["User reports", `${live.safety_pending ?? "…"} reports require action`, "Open reports", "Reports"]] as const;
-  const rangeLabel = range === "all" ? "All-time" : range === "custom" ? "Selected dates" : `Last ${range} days`;
-  const revenue=Number(live.revenue_paise||0)/100; const earnings=Number(live.host_earnings_paise||0)/100; const paid=Math.max(revenue,earnings,1);
-  return <div className="page-grid"><section className="hero-card"><div><p className="eyebrow accent">LIVE OPERATIONS</p><h2>Aasai Talk<br />at a glance.</h2><p className="hero-copy">Live data from your app: users, Hosts, payments, and reports needing a decision.</p><div className="dashboard-filter"><select className="dashboard-range" value={range} onChange={(event) => setRange(event.target.value as typeof range)}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option><option value="custom">Custom date range</option></select>{range === "custom" && <span className="dashboard-dates"><input aria-label="Start date" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /><span>to</span><input aria-label="End date" type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} /></span>}</div></div><div className="hero-orb">✓</div></section><section className="metrics"><Metric label="Revenue" value={`₹${revenue}`} note={`${rangeLabel} captured payments`} tone="coral" /><Metric label="Coin sales" value={String(live.coins_sold ?? 0)} note="Captured payment coins" tone="gold" /><Metric label="Call minutes" value={String(live.call_minutes ?? 0)} note="Billed call minutes" tone="violet" /><Metric label="Host earnings" value={`₹${earnings}`} note="Recorded earnings" tone="mint" /><Metric label="New users" value={String(live.new_users ?? 0)} note={`${rangeLabel} registrations`} tone="coral" /><Metric label="Pending approvals" value={String(pending)} note="Hosts and withdrawals" tone="gold" /><Metric label="Active Hosts" value={String(live.active_hosts ?? "…")} note="Approved Host profiles" tone="violet" /><Metric label="Open reports" value={String(live.safety_pending ?? "…")} note="Reports needing review" tone="mint" /></section><section className="panel queue-panel"><div className="panel-heading"><div><p className="eyebrow">PRIORITY QUEUE</p><h2>Needs your attention</h2></div><button className="text-button" onClick={() => onNavigate("Hosts")}>View all</button></div>{queue.map(([title, description, action, target], index) => <div className="queue-row" key={title}><span className={`queue-index i-${index + 1}`}>0{index + 1}</span><div><h3>{title}</h3><p>{description}</p></div><button className="outline-button" onClick={() => onNavigate(target)}>{action} →</button></div>)}</section><section className="panel dashboard-visual"><div><p className="eyebrow">PERIOD SNAPSHOT</p><h2>Revenue and Host earnings</h2></div><div className="snapshot-bars"><p><span>Captured revenue</span><b>₹{revenue}</b><i><em style={{width:`${Math.max(5,revenue/paid*100)}%`}} /></i></p><p><span>Host earnings</span><b>₹{earnings}</b><i><em style={{width:`${Math.max(5,earnings/paid*100)}%`}} /></i></p></div><button className="outline-button" onClick={()=>onNavigate("Performance")}>Open report center →</button></section>{error && <p className="login-message">{error}</p>}</div>;
+  useEffect(() => {
+    if (range === "custom" && (!startDate || !endDate)) return;
+    setMetrics(null);
+    void (async () => {
+      try {
+        const response = await adminRequest(
+          session,
+          "dashboard",
+          range === "all"
+            ? { all_time: true }
+            : range === "custom"
+              ? { start_date: startDate, end_date: endDate }
+              : { days: Number(range) },
+        );
+        setMetrics(response.metrics || {});
+      } catch (cause) {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Unable to load live dashboard data.",
+        );
+      }
+    })();
+  }, [session, range, startDate, endDate]);
+  if (!metrics && !error)
+    return (
+      <section className="panel page-loader-panel">
+        <PortalLoader label="Preparing your operations overview" />
+      </section>
+    );
+  const live = metrics || {};
+  const pending = (live.hosts_pending || 0) + (live.payouts_pending || 0);
+  const queue = [
+    [
+      "Host applications",
+      `${live.hosts_pending ?? "…"} awaiting review`,
+      "Review Hosts",
+      "Hosts",
+    ],
+    [
+      "Withdrawal requests",
+      `${live.payouts_pending ?? "…"} awaiting finance review`,
+      "Review payouts",
+      "Payouts",
+    ],
+    [
+      "User reports",
+      `${live.safety_pending ?? "…"} reports require action`,
+      "Open reports",
+      "Reports",
+    ],
+  ] as const;
+  const rangeLabel =
+    range === "all"
+      ? "All-time"
+      : range === "custom"
+        ? "Selected dates"
+        : `Last ${range} days`;
+  const revenue = Number(live.revenue_paise || 0) / 100;
+  const earnings = Number(live.host_earnings_paise || 0) / 100;
+  const paid = Math.max(revenue, earnings, 1);
+  return (
+    <div className="page-grid">
+      <section className="hero-card">
+        <div>
+          <p className="eyebrow accent">LIVE OPERATIONS</p>
+          <h2>
+            Aasai Talk
+            <br />
+            at a glance.
+          </h2>
+          <p className="hero-copy">
+            Live data from your app: users, Hosts, payments, and reports needing
+            a decision.
+          </p>
+          <div className="dashboard-filter">
+            <select
+              className="dashboard-range"
+              value={range}
+              onChange={(event) => setRange(event.target.value as typeof range)}
+            >
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="all">All time</option>
+              <option value="custom">Custom date range</option>
+            </select>
+            {range === "custom" && (
+              <span className="dashboard-dates">
+                <input
+                  aria-label="Start date"
+                  type="date"
+                  value={startDate}
+                  onChange={(event) => setStartDate(event.target.value)}
+                />
+                <span>to</span>
+                <input
+                  aria-label="End date"
+                  type="date"
+                  value={endDate}
+                  min={startDate || undefined}
+                  onChange={(event) => setEndDate(event.target.value)}
+                />
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="hero-orb">✓</div>
+      </section>
+      <section className="metrics">
+        <Metric
+          label="Revenue"
+          value={`₹${revenue}`}
+          note={`${rangeLabel} captured payments`}
+          tone="coral"
+        />
+        <Metric
+          label="Coin sales"
+          value={String(live.coins_sold ?? 0)}
+          note="Captured payment coins"
+          tone="gold"
+        />
+        <Metric
+          label="Call minutes"
+          value={String(live.call_minutes ?? 0)}
+          note="Billed call minutes"
+          tone="violet"
+        />
+        <Metric
+          label="Host earnings"
+          value={`₹${earnings}`}
+          note="Recorded earnings"
+          tone="mint"
+        />
+        <Metric
+          label="New users"
+          value={String(live.new_users ?? 0)}
+          note={`${rangeLabel} registrations`}
+          tone="coral"
+        />
+        <Metric
+          label="Pending approvals"
+          value={String(pending)}
+          note="Hosts and withdrawals"
+          tone="gold"
+        />
+        <Metric
+          label="Active Hosts"
+          value={String(live.active_hosts ?? "…")}
+          note="Approved Host profiles"
+          tone="violet"
+        />
+        <Metric
+          label="Open reports"
+          value={String(live.safety_pending ?? "…")}
+          note="Reports needing review"
+          tone="mint"
+        />
+      </section>
+      <section className="panel queue-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">PRIORITY QUEUE</p>
+            <h2>Needs your attention</h2>
+          </div>
+          <button className="text-button" onClick={() => onNavigate("Hosts")}>
+            View all
+          </button>
+        </div>
+        {queue.map(([title, description, action, target], index) => (
+          <div className="queue-row" key={title}>
+            <span className={`queue-index i-${index + 1}`}>0{index + 1}</span>
+            <div>
+              <h3>{title}</h3>
+              <p>{description}</p>
+            </div>
+            <button
+              className="outline-button"
+              onClick={() => onNavigate(target)}
+            >
+              {action} →
+            </button>
+          </div>
+        ))}
+      </section>
+      <section className="panel dashboard-visual">
+        <div>
+          <p className="eyebrow">PERIOD SNAPSHOT</p>
+          <h2>Revenue and Host earnings</h2>
+        </div>
+        <div className="snapshot-bars">
+          <p>
+            <span>Captured revenue</span>
+            <b>₹{revenue}</b>
+            <i>
+              <em
+                style={{ width: `${Math.max(5, (revenue / paid) * 100)}%` }}
+              />
+            </i>
+          </p>
+          <p>
+            <span>Host earnings</span>
+            <b>₹{earnings}</b>
+            <i>
+              <em
+                style={{ width: `${Math.max(5, (earnings / paid) * 100)}%` }}
+              />
+            </i>
+          </p>
+        </div>
+        <button
+          className="outline-button"
+          onClick={() => onNavigate("Performance")}
+        >
+          Open report center →
+        </button>
+      </section>
+      {error && <p className="login-message">{error}</p>}
+    </div>
+  );
 }
 function SuperAdminSecurity({ session }: { session: Session }) {
   const [password, setPassword] = useState("");
@@ -156,11 +774,113 @@ function SuperAdminSecurity({ session }: { session: Session }) {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const submit = async (event: FormEvent) => { event.preventDefault(); if (password !== confirmPassword) return setMessage("The passwords do not match."); setBusy(true); setMessage(""); try { const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-portal`, { method: "POST", headers: { "Content-Type": "application/json", apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ action: "change_own_password", password }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Unable to change password."); setPassword(""); setConfirmPassword(""); setMessage("Super Admin password changed successfully."); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to change password."); } finally { setBusy(false); } };
-  return <div className="panel security-form"><p className="eyebrow">SUPER ADMIN ONLY</p><h2>Change your password</h2><p>Only the Super Admin can update this password or reset staff passwords. This action is recorded in the audit log.</p><form onSubmit={(event) => void submit(event)}><label className="auth-field"><span>New password</span><span className="password-control"><input value={password} onChange={(event) => setPassword(event.target.value)} type={showPassword ? "text" : "password"} minLength={8} placeholder="At least 8 characters" required disabled={busy} /><button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOffIcon /> : <EyeIcon />}</button></span></label><label className="auth-field"><span>Confirm new password</span><input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} type={showPassword ? "text" : "password"} minLength={8} placeholder="Enter the same password again" required disabled={busy} /></label><button className="primary-button" type="submit" disabled={busy || password.length < 8 || confirmPassword !== password}>{busy ? "Saving…" : "Change Super Admin password"}</button></form>{message && <p className="admin-message" role="status">{message}</p>}</div>;
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (password !== confirmPassword)
+      return setMessage("The passwords do not match.");
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-portal`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ action: "change_own_password", password }),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || "Unable to change password.");
+      setPassword("");
+      setConfirmPassword("");
+      setMessage("Super Admin password changed successfully.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Unable to change password.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="panel security-form">
+      <p className="eyebrow">SUPER ADMIN ONLY</p>
+      <h2>Change your password</h2>
+      <p>
+        Only the Super Admin can update this password or reset staff passwords.
+        This action is recorded in the audit log.
+      </p>
+      <form onSubmit={(event) => void submit(event)}>
+        <label className="auth-field">
+          <span>New password</span>
+          <span className="password-control">
+            <input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              type={showPassword ? "text" : "password"}
+              minLength={8}
+              placeholder="At least 8 characters"
+              required
+              disabled={busy}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((visible) => !visible)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+            </button>
+          </span>
+        </label>
+        <label className="auth-field">
+          <span>Confirm new password</span>
+          <input
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            type={showPassword ? "text" : "password"}
+            minLength={8}
+            placeholder="Enter the same password again"
+            required
+            disabled={busy}
+          />
+        </label>
+        <button
+          className="primary-button"
+          type="submit"
+          disabled={busy || password.length < 8 || confirmPassword !== password}
+        >
+          {busy ? "Saving…" : "Change Super Admin password"}
+        </button>
+      </form>
+      {message && (
+        <p className="admin-message" role="status">
+          {message}
+        </p>
+      )}
+    </div>
+  );
 }
-function EyeIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.7" /></svg>; }
-function EyeOffIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3.5 3.5 17 17M9.7 6.4A10.7 10.7 0 0 1 12 6c6.1 0 9.5 6 9.5 6a17 17 0 0 1-3 3.7M6.1 8.1A17.3 17.3 0 0 0 2.5 12S5.9 18 12 18a10 10 0 0 0 3.2-.5" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>; }
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z" />
+      <circle cx="12" cy="12" r="2.7" />
+    </svg>
+  );
+}
+function EyeOffIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m3.5 3.5 17 17M9.7 6.4A10.7 10.7 0 0 1 12 6c6.1 0 9.5 6 9.5 6a17 17 0 0 1-3 3.7M6.1 8.1A17.3 17.3 0 0 0 2.5 12S5.9 18 12 18a10 10 0 0 0 3.2-.5" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    </svg>
+  );
+}
 function AdminAccess({ session }: { session: Session }) {
   const [accounts, setAccounts] = useState<AdminAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -168,126 +888,2754 @@ function AdminAccess({ session }: { session: Session }) {
   const [saving, setSaving] = useState<string | null>(null);
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [newRole, setNewRole] = useState<"finance_admin" | "moderator" | "support">("support");
+  const [newRole, setNewRole] = useState<
+    "finance_admin" | "moderator" | "support"
+  >("support");
   const [newPages, setNewPages] = useState<Section[]>(rolePages.support);
   const [creating, setCreating] = useState(false);
-  const call = async (action: string, payload: Record<string, unknown> = {}) => {
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-portal`, { method: "POST", headers: { "Content-Type": "application/json", apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ action, ...payload }) });
-    const data = await response.json(); if (!response.ok) throw new Error(data.error || "The request could not be completed."); return data;
+  const call = async (
+    action: string,
+    payload: Record<string, unknown> = {},
+  ) => {
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-portal`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ action, ...payload }),
+      },
+    );
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.error || "The request could not be completed.");
+    return data;
   };
-  const load = async () => { setLoading(true); setMessage(""); try { const data = await call("list_admin_accounts"); setAccounts(data.accounts || []); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to load admin accounts."); } finally { setLoading(false); } };
-  useEffect(() => { void load(); }, []);
-  const assign = async (userId: string, role: "finance_admin" | "moderator" | "support") => { setSaving(userId); setMessage(""); try { const data = await call("assign_admin_role", { user_id: userId, role, active: true }); setAccounts(data.accounts || []); setMessage("Admin role updated and recorded in the audit log."); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to update the role."); } finally { setSaving(null); } };
-  const resetPassword = async (userId: string, password: string) => { setSaving(userId); setMessage(""); try { await call("reset_staff_password", { user_id: userId, password }); setMessage("Staff password reset successfully. Share it privately with that staff member."); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to reset the staff password."); } finally { setSaving(null); } };
-  const create = async (event: FormEvent) => { event.preventDefault(); setCreating(true); setMessage(""); try { const data = await call("create_admin_account", { email: newEmail, password: newPassword, role: newRole, page_access: newPages }); setAccounts(data.accounts || []); setNewEmail(""); setNewPassword(""); setNewRole("support"); setNewPages(rolePages.support); setMessage("Staff admin created. Share the temporary password privately."); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to create the staff account."); } finally { setCreating(false); } };
-  const changeRole = (role: "finance_admin" | "moderator" | "support") => { setNewRole(role); setNewPages(rolePages[role]); };
-  const toggleNewPage = (page: Section) => setNewPages((pages) => pages.includes(page) ? pages.filter((value) => value !== page) : [...pages, page]);
-  return <div className="admin-access-stack"><SuperAdminSecurity session={session} /><div className="panel admin-access-page"><div className="panel-heading"><div><p className="eyebrow">SUPER ADMIN ONLY</p><h2>Admin access</h2><p>Create staff accounts, select their role, and choose the pages they may access.</p></div><button className="outline-button" onClick={() => void load()} disabled={loading || creating}>Refresh</button></div><form className="create-admin-form" onSubmit={(event) => void create(event)}><label><span>Staff email</span><input value={newEmail} onChange={(event) => setNewEmail(event.target.value)} type="email" placeholder="staff@example.com" required disabled={creating} /></label><label><span>Temporary password</span><input value={newPassword} onChange={(event) => setNewPassword(event.target.value)} type="password" minLength={8} placeholder="At least 8 characters" required disabled={creating} /></label><label><span>Role</span><select value={newRole} onChange={(event) => changeRole(event.target.value as "finance_admin" | "moderator" | "support")} disabled={creating}><option value="support">Support</option><option value="moderator">Moderator</option><option value="finance_admin">Finance Admin</option></select></label><button className="primary-button" type="submit" disabled={creating || newPassword.length < 8 || !newPages.length}>{creating ? "Creating…" : "Create admin"}</button><fieldset className="page-access-picker"><legend>Page access for this role</legend>{rolePages[newRole].map((page) => <label key={page}><input type="checkbox" checked={newPages.includes(page)} onChange={() => toggleNewPage(page)} disabled={creating} />{page}</label>)}</fieldset></form>{loading ? <PortalLoader label="Loading staff access" compact /> : <div className="admin-list">{accounts.map((account) => <AdminAccountRow key={account.id} account={account} saving={saving === account.id} onAssign={assign} onResetPassword={resetPassword} />)}</div>}{message && <p className="admin-message" role="status">{message}</p>}</div></div>;
+  const load = async () => {
+    setLoading(true);
+    setMessage("");
+    try {
+      const data = await call("list_admin_accounts");
+      setAccounts(data.accounts || []);
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to load admin accounts.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+  const assign = async (
+    userId: string,
+    role: "finance_admin" | "moderator" | "support",
+  ) => {
+    setSaving(userId);
+    setMessage("");
+    try {
+      const data = await call("assign_admin_role", {
+        user_id: userId,
+        role,
+        active: true,
+      });
+      setAccounts(data.accounts || []);
+      setMessage("Admin role updated and recorded in the audit log.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Unable to update the role.",
+      );
+    } finally {
+      setSaving(null);
+    }
+  };
+  const resetPassword = async (userId: string, password: string) => {
+    setSaving(userId);
+    setMessage("");
+    try {
+      await call("reset_staff_password", { user_id: userId, password });
+      setMessage(
+        "Staff password reset successfully. Share it privately with that staff member.",
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to reset the staff password.",
+      );
+    } finally {
+      setSaving(null);
+    }
+  };
+  const create = async (event: FormEvent) => {
+    event.preventDefault();
+    setCreating(true);
+    setMessage("");
+    try {
+      const data = await call("create_admin_account", {
+        email: newEmail,
+        password: newPassword,
+        role: newRole,
+        page_access: newPages,
+      });
+      setAccounts(data.accounts || []);
+      setNewEmail("");
+      setNewPassword("");
+      setNewRole("support");
+      setNewPages(rolePages.support);
+      setMessage(
+        "Staff admin created. Share the temporary password privately.",
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to create the staff account.",
+      );
+    } finally {
+      setCreating(false);
+    }
+  };
+  const changeRole = (role: "finance_admin" | "moderator" | "support") => {
+    setNewRole(role);
+    setNewPages(rolePages[role]);
+  };
+  const toggleNewPage = (page: Section) =>
+    setNewPages((pages) =>
+      pages.includes(page)
+        ? pages.filter((value) => value !== page)
+        : [...pages, page],
+    );
+  return (
+    <div className="admin-access-stack">
+      <SuperAdminSecurity session={session} />
+      <div className="panel admin-access-page">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">SUPER ADMIN ONLY</p>
+            <h2>Admin access</h2>
+            <p>
+              Create staff accounts, select their role, and choose the pages
+              they may access.
+            </p>
+          </div>
+          <button
+            className="outline-button"
+            onClick={() => void load()}
+            disabled={loading || creating}
+          >
+            Refresh
+          </button>
+        </div>
+        <form
+          className="create-admin-form"
+          onSubmit={(event) => void create(event)}
+        >
+          <label>
+            <span>Staff email</span>
+            <input
+              value={newEmail}
+              onChange={(event) => setNewEmail(event.target.value)}
+              type="email"
+              placeholder="staff@example.com"
+              required
+              disabled={creating}
+            />
+          </label>
+          <label>
+            <span>Temporary password</span>
+            <input
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              type="password"
+              minLength={8}
+              placeholder="At least 8 characters"
+              required
+              disabled={creating}
+            />
+          </label>
+          <label>
+            <span>Role</span>
+            <select
+              value={newRole}
+              onChange={(event) =>
+                changeRole(
+                  event.target.value as
+                    "finance_admin" | "moderator" | "support",
+                )
+              }
+              disabled={creating}
+            >
+              <option value="support">Support</option>
+              <option value="moderator">Moderator</option>
+              <option value="finance_admin">Finance Admin</option>
+            </select>
+          </label>
+          <button
+            className="primary-button"
+            type="submit"
+            disabled={creating || newPassword.length < 8 || !newPages.length}
+          >
+            {creating ? "Creating…" : "Create admin"}
+          </button>
+          <fieldset className="page-access-picker">
+            <legend>Page access for this role</legend>
+            {rolePages[newRole].map((page) => (
+              <label key={page}>
+                <input
+                  type="checkbox"
+                  checked={newPages.includes(page)}
+                  onChange={() => toggleNewPage(page)}
+                  disabled={creating}
+                />
+                {page}
+              </label>
+            ))}
+          </fieldset>
+        </form>
+        {loading ? (
+          <PortalLoader label="Loading staff access" compact />
+        ) : (
+          <div className="admin-list">
+            {accounts.map((account) => (
+              <AdminAccountRow
+                key={account.id}
+                account={account}
+                saving={saving === account.id}
+                onAssign={assign}
+                onResetPassword={resetPassword}
+              />
+            ))}
+          </div>
+        )}
+        {message && (
+          <p className="admin-message" role="status">
+            {message}
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
-function AdminAccountRow({ account, saving, onAssign, onResetPassword }: { account: AdminAccount; saving: boolean; onAssign: (userId: string, role: "finance_admin" | "moderator" | "support") => void; onResetPassword: (userId: string, password: string) => void }) {
-  const [role, setRole] = useState<"finance_admin" | "moderator" | "support">(account.role && account.role !== "super_admin" ? account.role : "support");
-  useEffect(() => { if (account.role && account.role !== "super_admin") setRole(account.role); }, [account.role]);
+function AdminAccountRow({
+  account,
+  saving,
+  onAssign,
+  onResetPassword,
+}: {
+  account: AdminAccount;
+  saving: boolean;
+  onAssign: (
+    userId: string,
+    role: "finance_admin" | "moderator" | "support",
+  ) => void;
+  onResetPassword: (userId: string, password: string) => void;
+}) {
+  const [role, setRole] = useState<"finance_admin" | "moderator" | "support">(
+    account.role && account.role !== "super_admin" ? account.role : "support",
+  );
+  useEffect(() => {
+    if (account.role && account.role !== "super_admin") setRole(account.role);
+  }, [account.role]);
   const isSuperAdmin = account.role === "super_admin";
   const [password, setPassword] = useState("");
-  return <article className="admin-account-row"><div><strong>{account.email || "No email"}</strong><span>{account.email_confirmed_at ? "Email confirmed" : "Email confirmation pending"}</span></div><span className={`role-status ${isSuperAdmin ? "super" : account.active ? "active" : "pending"}`}>{isSuperAdmin ? "Super Admin" : account.active ? account.role?.replace("_", " ") : "Pending review"}</span>{isSuperAdmin ? <span className="role-locked">Full access</span> : <div className="role-action"><select value={role} onChange={(event) => setRole(event.target.value as "finance_admin" | "moderator" | "support")} disabled={saving}><option value="finance_admin">Finance Admin</option><option value="moderator">Moderator</option><option value="support">Support</option></select><button className="primary-button" onClick={() => onAssign(account.id, role)} disabled={saving || !account.email_confirmed_at}>{saving ? "Saving…" : account.active ? "Update role" : "Approve access"}</button><input value={password} onChange={(event) => setPassword(event.target.value)} type="password" minLength={8} placeholder="New staff password" disabled={saving} /><button className="outline-button" onClick={() => { onResetPassword(account.id, password); setPassword(""); }} disabled={saving || password.length < 8}>Reset password</button></div>}</article>;
-} 
+  return (
+    <article className="admin-account-row">
+      <div>
+        <strong>{account.email || "No email"}</strong>
+        <span>
+          {account.email_confirmed_at
+            ? "Email confirmed"
+            : "Email confirmation pending"}
+        </span>
+      </div>
+      <span
+        className={`role-status ${isSuperAdmin ? "super" : account.active ? "active" : "pending"}`}
+      >
+        {isSuperAdmin
+          ? "Super Admin"
+          : account.active
+            ? account.role?.replace("_", " ")
+            : "Pending review"}
+      </span>
+      {isSuperAdmin ? (
+        <span className="role-locked">Full access</span>
+      ) : (
+        <div className="role-action">
+          <select
+            value={role}
+            onChange={(event) =>
+              setRole(
+                event.target.value as "finance_admin" | "moderator" | "support",
+              )
+            }
+            disabled={saving}
+          >
+            <option value="finance_admin">Finance Admin</option>
+            <option value="moderator">Moderator</option>
+            <option value="support">Support</option>
+          </select>
+          <button
+            className="primary-button"
+            onClick={() => onAssign(account.id, role)}
+            disabled={saving || !account.email_confirmed_at}
+          >
+            {saving
+              ? "Saving…"
+              : account.active
+                ? "Update role"
+                : "Approve access"}
+          </button>
+          <input
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            type="password"
+            minLength={8}
+            placeholder="New staff password"
+            disabled={saving}
+          />
+          <button
+            className="outline-button"
+            onClick={() => {
+              onResetPassword(account.id, password);
+              setPassword("");
+            }}
+            disabled={saving || password.length < 8}
+          >
+            Reset password
+          </button>
+        </div>
+      )}
+    </article>
+  );
+}
 function SpecialOffers({ session }: { session: Session }) {
-  const [packs,setPacks]=useState<Record<string,unknown>[]>([]); const [loading,setLoading]=useState(true); const [saving,setSaving]=useState(false); const [message,setMessage]=useState(""); const [editing,setEditing]=useState<Record<string,unknown>|null>(null);
-  const [label,setLabel]=useState("Special offer"); const [coins,setCoins]=useState(""); const [bonus,setBonus]=useState("0"); const [price,setPrice]=useState(""); const [from,setFrom]=useState(""); const [until,setUntil]=useState(""); const [active,setActive]=useState(true);
-  const load=async()=>{setLoading(true);setMessage("");try{const result=await adminRequest(session,"list_coin_packs");setPacks(result.items||[]);}catch(cause){setMessage(cause instanceof Error?cause.message:"Unable to load offers.");}finally{setLoading(false);}};
-  useEffect(()=>{void load();},[]);
-  const reset=()=>{setEditing(null);setLabel("Special offer");setCoins("");setBonus("0");setPrice("");setFrom("");setUntil("");setActive(true);};
-  const edit=(item:Record<string,unknown>)=>{setEditing(item);setLabel(String(item.special_label||"Special offer"));setCoins(String(item.coins||""));setBonus(String(item.bonus_coins||0));setPrice(String(Number(item.price_paise||0)/100));setFrom(typeof item.available_from==="string"?item.available_from.slice(0,16):"");setUntil(typeof item.available_until==="string"?item.available_until.slice(0,16):"");setActive(Boolean(item.active));window.scrollTo({top:0,behavior:"smooth"});};
-  const save=async(event:FormEvent)=>{event.preventDefault();setSaving(true);setMessage("");try{await adminRequest(session,"save_special_offer",{id:editing?.id,coins:Number(coins),bonus_coins:Number(bonus),price_paise:Math.round(Number(price)*100),special_label:label,available_from:from||null,available_until:until||null,active});await load();reset();setMessage(editing?"Special offer updated.":"Special offer created.");}catch(cause){setMessage(cause instanceof Error?cause.message:"Unable to save offer.");}finally{setSaving(false);}};
-  const toggle=async(item:Record<string,unknown>)=>{setSaving(true);setMessage("");try{await adminRequest(session,"set_coin_pack_active",{id:item.id,active:!item.active});await load();}catch(cause){setMessage(cause instanceof Error?cause.message:"Unable to update offer.");}finally{setSaving(false);}};
-  const special=packs.filter((item)=>item.is_special); const regular=packs.filter((item)=>!item.is_special);
-  return <div className="offer-manager"><section className="panel offer-intro"><div><p className="eyebrow">WALLET CATALOG</p><h2>Special offers</h2><p>Create, schedule, edit, activate, or pause the offers shown in the Aasai Talk wallet.</p></div><span>{special.filter((item)=>item.active).length} live offers</span></section><section className="panel offer-editor"><div className="panel-heading"><div><p className="eyebrow">{editing?"EDIT OFFER":"NEW OFFER"}</p><h2>{editing?"Update special offer":"Create special offer"}</h2></div>{editing&&<button type="button" className="outline-button" onClick={reset} disabled={saving}>Cancel edit</button>}</div><form onSubmit={(event)=>void save(event)}><label><span>Offer label</span><input value={label} onChange={(event)=>setLabel(event.target.value)} maxLength={80} required disabled={saving} /></label><label><span>Base coins</span><input value={coins} onChange={(event)=>setCoins(event.target.value)} type="number" min="1" required disabled={saving} /></label><label><span>Bonus coins</span><input value={bonus} onChange={(event)=>setBonus(event.target.value)} type="number" min="0" required disabled={saving} /></label><label><span>Price (₹)</span><input value={price} onChange={(event)=>setPrice(event.target.value)} type="number" min="0.01" step="0.01" required disabled={saving} /></label><label><span>Available from <small>Optional</small></span><input value={from} onChange={(event)=>setFrom(event.target.value)} type="datetime-local" disabled={saving} /></label><label><span>Available until <small>Optional</small></span><input value={until} onChange={(event)=>setUntil(event.target.value)} type="datetime-local" min={from||undefined} disabled={saving} /></label><label className="offer-active"><input checked={active} onChange={(event)=>setActive(event.target.checked)} type="checkbox" disabled={saving} />Publish when saved</label><button className="primary-button" type="submit" disabled={saving}>{saving?"Saving…":editing?"Save offer":"Create offer"}</button></form></section>{loading?<section className="panel page-loader-panel"><PortalLoader label="Loading wallet offers" /></section>:<><section className="offer-grid">{special.map((item)=><article className="panel offer-card" key={String(item.id)}><div><p className="eyebrow">{item.active?"LIVE OFFER":"PAUSED OFFER"}</p><h3>{String(item.special_label||"Special offer")}</h3><strong>{Number(item.coins||0).toLocaleString("en-IN")} + {Number(item.bonus_coins||0).toLocaleString("en-IN")}</strong><span>coins · ₹{Number(item.price_paise||0)/100}</span></div><small>{item.available_from||item.available_until?`${item.available_from?formatDateTime(String(item.available_from)):"Now"} to ${item.available_until?formatDateTime(String(item.available_until)):"No end date"}`:"Always available"}</small><div><button className="outline-button" onClick={()=>edit(item)} disabled={saving}>Edit</button><button className="outline-button" onClick={()=>void toggle(item)} disabled={saving}>{item.active?"Pause":"Activate"}</button></div></article>)}{!special.length&&<p className="admin-empty">No special offers created yet.</p>}</section><section className="panel regular-packs"><p className="eyebrow">STANDARD COIN PACKS</p><h2>Normal wallet packs</h2>{regular.map((item)=><div key={String(item.id)}><span>{Number(item.coins||0).toLocaleString("en-IN")} coins · ₹{Number(item.price_paise||0)/100}</span><button className="outline-button" onClick={()=>void toggle(item)} disabled={saving}>{item.active?"Deactivate":"Activate"}</button></div>)}</section></>}{message&&<p className="admin-message" role="status">{message}</p>}</div>;
+  const [packs, setPacks] = useState<Record<string, unknown>[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [editing, setEditing] = useState<Record<string, unknown> | null>(null);
+  const [label, setLabel] = useState("Special offer");
+  const [coins, setCoins] = useState("");
+  const [bonus, setBonus] = useState("0");
+  const [price, setPrice] = useState("");
+  const [from, setFrom] = useState("");
+  const [until, setUntil] = useState("");
+  const [active, setActive] = useState(true);
+  const load = async () => {
+    setLoading(true);
+    setMessage("");
+    try {
+      const result = await adminRequest(session, "list_coin_packs");
+      setPacks(result.items || []);
+    } catch (cause) {
+      setMessage(
+        cause instanceof Error ? cause.message : "Unable to load offers.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+  const reset = () => {
+    setEditing(null);
+    setLabel("Special offer");
+    setCoins("");
+    setBonus("0");
+    setPrice("");
+    setFrom("");
+    setUntil("");
+    setActive(true);
+  };
+  const edit = (item: Record<string, unknown>) => {
+    setEditing(item);
+    setLabel(String(item.special_label || "Special offer"));
+    setCoins(String(item.coins || ""));
+    setBonus(String(item.bonus_coins || 0));
+    setPrice(String(Number(item.price_paise || 0) / 100));
+    setFrom(
+      typeof item.available_from === "string"
+        ? item.available_from.slice(0, 16)
+        : "",
+    );
+    setUntil(
+      typeof item.available_until === "string"
+        ? item.available_until.slice(0, 16)
+        : "",
+    );
+    setActive(Boolean(item.active));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+    try {
+      await adminRequest(session, "save_special_offer", {
+        id: editing?.id,
+        coins: Number(coins),
+        bonus_coins: Number(bonus),
+        price_paise: Math.round(Number(price) * 100),
+        special_label: label,
+        available_from: from || null,
+        available_until: until || null,
+        active,
+      });
+      await load();
+      reset();
+      setMessage(editing ? "Special offer updated." : "Special offer created.");
+    } catch (cause) {
+      setMessage(
+        cause instanceof Error ? cause.message : "Unable to save offer.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+  const toggle = async (item: Record<string, unknown>) => {
+    setSaving(true);
+    setMessage("");
+    try {
+      await adminRequest(session, "set_coin_pack_active", {
+        id: item.id,
+        active: !item.active,
+      });
+      await load();
+    } catch (cause) {
+      setMessage(
+        cause instanceof Error ? cause.message : "Unable to update offer.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+  const special = packs.filter((item) => item.is_special);
+  const regular = packs.filter((item) => !item.is_special);
+  return (
+    <div className="offer-manager">
+      <section className="panel offer-intro">
+        <div>
+          <p className="eyebrow">WALLET CATALOG</p>
+          <h2>Special offers</h2>
+          <p>
+            Create, schedule, edit, activate, or pause the offers shown in the
+            Aasai Talk wallet.
+          </p>
+        </div>
+        <span>{special.filter((item) => item.active).length} live offers</span>
+      </section>
+      <section className="panel offer-editor">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">{editing ? "EDIT OFFER" : "NEW OFFER"}</p>
+            <h2>{editing ? "Update special offer" : "Create special offer"}</h2>
+          </div>
+          {editing && (
+            <button
+              type="button"
+              className="outline-button"
+              onClick={reset}
+              disabled={saving}
+            >
+              Cancel edit
+            </button>
+          )}
+        </div>
+        <form onSubmit={(event) => void save(event)}>
+          <label>
+            <span>Offer label</span>
+            <input
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+              maxLength={80}
+              required
+              disabled={saving}
+            />
+          </label>
+          <label>
+            <span>Base coins</span>
+            <input
+              value={coins}
+              onChange={(event) => setCoins(event.target.value)}
+              type="number"
+              min="1"
+              required
+              disabled={saving}
+            />
+          </label>
+          <label>
+            <span>Bonus coins</span>
+            <input
+              value={bonus}
+              onChange={(event) => setBonus(event.target.value)}
+              type="number"
+              min="0"
+              required
+              disabled={saving}
+            />
+          </label>
+          <label>
+            <span>Price (₹)</span>
+            <input
+              value={price}
+              onChange={(event) => setPrice(event.target.value)}
+              type="number"
+              min="0.01"
+              step="0.01"
+              required
+              disabled={saving}
+            />
+          </label>
+          <label>
+            <span>
+              Available from <small>Optional</small>
+            </span>
+            <input
+              value={from}
+              onChange={(event) => setFrom(event.target.value)}
+              type="datetime-local"
+              disabled={saving}
+            />
+          </label>
+          <label>
+            <span>
+              Available until <small>Optional</small>
+            </span>
+            <input
+              value={until}
+              onChange={(event) => setUntil(event.target.value)}
+              type="datetime-local"
+              min={from || undefined}
+              disabled={saving}
+            />
+          </label>
+          <label className="offer-active">
+            <input
+              checked={active}
+              onChange={(event) => setActive(event.target.checked)}
+              type="checkbox"
+              disabled={saving}
+            />
+            Publish when saved
+          </label>
+          <button className="primary-button" type="submit" disabled={saving}>
+            {saving ? "Saving…" : editing ? "Save offer" : "Create offer"}
+          </button>
+        </form>
+      </section>
+      {loading ? (
+        <section className="panel page-loader-panel">
+          <PortalLoader label="Loading wallet offers" />
+        </section>
+      ) : (
+        <>
+          <section className="offer-grid">
+            {special.map((item) => (
+              <article className="panel offer-card" key={String(item.id)}>
+                <div>
+                  <p className="eyebrow">
+                    {item.active ? "LIVE OFFER" : "PAUSED OFFER"}
+                  </p>
+                  <h3>{String(item.special_label || "Special offer")}</h3>
+                  <strong>
+                    {Number(item.coins || 0).toLocaleString("en-IN")} +{" "}
+                    {Number(item.bonus_coins || 0).toLocaleString("en-IN")}
+                  </strong>
+                  <span>coins · ₹{Number(item.price_paise || 0) / 100}</span>
+                </div>
+                <small>
+                  {item.available_from || item.available_until
+                    ? `${item.available_from ? formatDateTime(String(item.available_from)) : "Now"} to ${item.available_until ? formatDateTime(String(item.available_until)) : "No end date"}`
+                    : "Always available"}
+                </small>
+                <div>
+                  <button
+                    className="outline-button"
+                    onClick={() => edit(item)}
+                    disabled={saving}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="outline-button"
+                    onClick={() => void toggle(item)}
+                    disabled={saving}
+                  >
+                    {item.active ? "Pause" : "Activate"}
+                  </button>
+                </div>
+              </article>
+            ))}
+            {!special.length && (
+              <p className="admin-empty">No special offers created yet.</p>
+            )}
+          </section>
+          <section className="panel regular-packs">
+            <p className="eyebrow">STANDARD COIN PACKS</p>
+            <h2>Normal wallet packs</h2>
+            {regular.map((item) => (
+              <div key={String(item.id)}>
+                <span>
+                  {Number(item.coins || 0).toLocaleString("en-IN")} coins · ₹
+                  {Number(item.price_paise || 0) / 100}
+                </span>
+                <button
+                  className="outline-button"
+                  onClick={() => void toggle(item)}
+                  disabled={saving}
+                >
+                  {item.active ? "Deactivate" : "Activate"}
+                </button>
+              </div>
+            ))}
+          </section>
+        </>
+      )}
+      {message && (
+        <p className="admin-message" role="status">
+          {message}
+        </p>
+      )}
+    </div>
+  );
 }
 function PerformanceReports({ session }: { session: Session }) {
-  const [range,setRange]=useState<"7"|"30"|"90"|"all"|"custom">("30"); const [start,setStart]=useState(""); const [end,setEnd]=useState(""); const [view,setView]=useState<"Executive"|"Hosts"|"Users"|"Payments"|"Safety">("Executive");
-  const [tableSearch,setTableSearch]=useState("");
-  const [data,setData]=useState<{hosts:Record<string,unknown>[];users:Record<string,unknown>[];payments:Record<string,unknown>[];payouts:Record<string,unknown>[];reports:Record<string,unknown>[];summary:Record<string,unknown>}|null>(null); const [error,setError]=useState("");
-  useEffect(()=>{try{const saved=JSON.parse(localStorage.getItem("aasai-admin-performance-filters")||"{}");if(["7","30","90","all","custom"].includes(saved.range))setRange(saved.range);if(["Executive","Hosts","Users","Payments","Safety"].includes(saved.view))setView(saved.view);if(typeof saved.start==="string")setStart(saved.start);if(typeof saved.end==="string")setEnd(saved.end);}catch{/* ignore invalid local preference */}},[]);
-  useEffect(()=>{localStorage.setItem("aasai-admin-performance-filters",JSON.stringify({range,view,start,end}));},[range,view,start,end]);
-  useEffect(()=>{if(range==="custom"&&(!start||!end))return;setData(null);setError("");void adminRequest(session,"performance_reports",range==="all"?{all_time:true}:range==="custom"?{start_date:start,end_date:end}:{days:Number(range)}).then((result)=>setData({hosts:result.hosts||[],users:result.users||[],payments:result.payments||[],payouts:result.payouts||[],reports:result.reports||[],summary:result.summary||{}})).catch((cause)=>setError(cause instanceof Error?cause.message:"Unable to load performance reports."));},[session,range,start,end]);
-  const name=(item:Record<string,unknown>)=>{const profile=item.profile&&typeof item.profile==="object"?item.profile as Record<string,unknown>:{};return String(profile.display_name||profile.username||item.phone||"Unknown");};
-  const summary=data?.summary||{}; const tabs=["Executive","Hosts","Users","Payments","Safety"] as const;
-  const matches=(item:Record<string,unknown>)=>!tableSearch.trim()||JSON.stringify(item).toLowerCase().includes(tableSearch.trim().toLowerCase()); const hosts=data?.hosts.filter(matches)||[]; const users=data?.users.filter(matches)||[]; const payments=data?.payments.filter(matches)||[]; const reports=data?.reports.filter(matches)||[];
-  const cards=view==="Hosts"?[["Active Hosts",summary.active_hosts,"Hosts with calls"],["Host earnings",`₹${Number(summary.host_earnings_paise||0)/100}`,"Earnings from call ledger"],["Talk minutes",summary.call_minutes,"Actual call duration"]]:view==="Users"?[["Active users",summary.active_users,"Users who made calls"],["Coins spent",summary.user_spent_coins,"Coins spent in calls"],["Audio / video",`${summary.audio_calls||0} / ${summary.video_calls||0}`,"Call preference mix"]]:view==="Payments"?[["Captured payments",summary.payments_captured,"Successful Razorpay payments"],["Failed payments",summary.payments_failed,"Need reconciliation review"],["Revenue",`₹${Number(summary.payment_revenue_paise||0)/100}`,"Captured value"]]:view==="Safety"?[["Open reports",summary.reports_open,"Open or under review"],["Resolved reports",summary.reports_resolved,"Resolved in this period"],["Rejected reports",Number(data?.reports.filter((report)=>report.status==="Rejected").length||0),"No action taken"]]:[["Completed calls",summary.calls_completed,`${summary.call_minutes||0} actual minutes`],["Average connected call",`${summary.average_call_minutes||0} min`,`${summary.calls_total||0} total call attempts`],["Payment revenue",`₹${Number(summary.payment_revenue_paise||0)/100}`,`${summary.payments_captured||0} captured · ${summary.payments_failed||0} failed`],["Payout workload",`${summary.payouts_pending||0} pending`,`₹${Number(summary.payouts_pending_paise||0)/100} awaiting action`]];
-  const table = (title:string, caption:string, content:ReactNode) => <section className="panel report-table"><header><div><p className="eyebrow">LIVE REPORT DATA</p><h2>{title}</h2></div><span>{caption}</span></header>{content}</section>;
-  const exportCurrent=()=>{const source=view==="Hosts"?hosts:view==="Users"?users:view==="Payments"?payments:view==="Safety"?reports:[];const columns=source.length?Object.keys(source[0]).filter((key)=>!["profile","provider_payload"].includes(key)):[];const csv=[columns.join(","),...source.map((row)=>columns.map((column)=>JSON.stringify(typeof row[column]==="object"?JSON.stringify(row[column]):row[column]??"")).join(","))].join("\n");const url=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));const link=document.createElement("a");link.href=url;link.download=`aasai-talk-${view.toLowerCase()}-report.csv`;link.click();URL.revokeObjectURL(url);};
+  const [range, setRange] = useState<"7" | "30" | "90" | "all" | "custom">(
+    "30",
+  );
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [view, setView] = useState<
+    "Executive" | "Hosts" | "Users" | "Payments" | "Safety"
+  >("Executive");
+  const [tableSearch, setTableSearch] = useState("");
+  const [data, setData] = useState<{
+    hosts: Record<string, unknown>[];
+    users: Record<string, unknown>[];
+    payments: Record<string, unknown>[];
+    payouts: Record<string, unknown>[];
+    reports: Record<string, unknown>[];
+    summary: Record<string, unknown>;
+  } | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(
+        localStorage.getItem("aasai-admin-performance-filters") || "{}",
+      );
+      if (["7", "30", "90", "all", "custom"].includes(saved.range))
+        setRange(saved.range);
+      if (
+        ["Executive", "Hosts", "Users", "Payments", "Safety"].includes(
+          saved.view,
+        )
+      )
+        setView(saved.view);
+      if (typeof saved.start === "string") setStart(saved.start);
+      if (typeof saved.end === "string") setEnd(saved.end);
+    } catch {
+      /* ignore invalid local preference */
+    }
+  }, []);
+  useEffect(() => {
+    localStorage.setItem(
+      "aasai-admin-performance-filters",
+      JSON.stringify({ range, view, start, end }),
+    );
+  }, [range, view, start, end]);
+  useEffect(() => {
+    if (range === "custom" && (!start || !end)) return;
+    setData(null);
+    setError("");
+    void adminRequest(
+      session,
+      "performance_reports",
+      range === "all"
+        ? { all_time: true }
+        : range === "custom"
+          ? { start_date: start, end_date: end }
+          : { days: Number(range) },
+    )
+      .then((result) =>
+        setData({
+          hosts: result.hosts || [],
+          users: result.users || [],
+          payments: result.payments || [],
+          payouts: result.payouts || [],
+          reports: result.reports || [],
+          summary: result.summary || {},
+        }),
+      )
+      .catch((cause) =>
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Unable to load performance reports.",
+        ),
+      );
+  }, [session, range, start, end]);
+  const name = (item: Record<string, unknown>) => {
+    const profile =
+      item.profile && typeof item.profile === "object"
+        ? (item.profile as Record<string, unknown>)
+        : {};
+    return String(
+      profile.display_name || profile.username || item.phone || "Unknown",
+    );
+  };
+  const summary = data?.summary || {};
+  const tabs = ["Executive", "Hosts", "Users", "Payments", "Safety"] as const;
+  const matches = (item: Record<string, unknown>) =>
+    !tableSearch.trim() ||
+    JSON.stringify(item)
+      .toLowerCase()
+      .includes(tableSearch.trim().toLowerCase());
+  const hosts = data?.hosts.filter(matches) || [];
+  const users = data?.users.filter(matches) || [];
+  const payments = data?.payments.filter(matches) || [];
+  const reports = data?.reports.filter(matches) || [];
+  const cards =
+    view === "Hosts"
+      ? [
+          ["Active Hosts", summary.active_hosts, "Hosts with calls"],
+          [
+            "Host earnings",
+            `₹${Number(summary.host_earnings_paise || 0) / 100}`,
+            "Earnings from call ledger",
+          ],
+          ["Talk minutes", summary.call_minutes, "Actual call duration"],
+        ]
+      : view === "Users"
+        ? [
+            ["Active users", summary.active_users, "Users who made calls"],
+            ["Coins spent", summary.user_spent_coins, "Coins spent in calls"],
+            [
+              "Audio / video",
+              `${summary.audio_calls || 0} / ${summary.video_calls || 0}`,
+              "Call preference mix",
+            ],
+          ]
+        : view === "Payments"
+          ? [
+              [
+                "Captured payments",
+                summary.payments_captured,
+                "Successful Razorpay payments",
+              ],
+              [
+                "Failed payments",
+                summary.payments_failed,
+                "Need reconciliation review",
+              ],
+              [
+                "Revenue",
+                `₹${Number(summary.payment_revenue_paise || 0) / 100}`,
+                "Captured value",
+              ],
+            ]
+          : view === "Safety"
+            ? [
+                ["Open reports", summary.reports_open, "Open or under review"],
+                [
+                  "Resolved reports",
+                  summary.reports_resolved,
+                  "Resolved in this period",
+                ],
+                [
+                  "Rejected reports",
+                  Number(
+                    data?.reports.filter(
+                      (report) => report.status === "Rejected",
+                    ).length || 0,
+                  ),
+                  "No action taken",
+                ],
+              ]
+            : [
+                [
+                  "Completed calls",
+                  summary.calls_completed,
+                  `${summary.call_minutes || 0} actual minutes`,
+                ],
+                [
+                  "Average connected call",
+                  `${summary.average_call_minutes || 0} min`,
+                  `${summary.calls_total || 0} total call attempts`,
+                ],
+                [
+                  "Payment revenue",
+                  `₹${Number(summary.payment_revenue_paise || 0) / 100}`,
+                  `${summary.payments_captured || 0} captured · ${summary.payments_failed || 0} failed`,
+                ],
+                [
+                  "Payout workload",
+                  `${summary.payouts_pending || 0} pending`,
+                  `₹${Number(summary.payouts_pending_paise || 0) / 100} awaiting action`,
+                ],
+              ];
+  const table = (title: string, caption: string, content: ReactNode) => (
+    <section className="panel report-table">
+      <header>
+        <div>
+          <p className="eyebrow">LIVE REPORT DATA</p>
+          <h2>{title}</h2>
+        </div>
+        <span>{caption}</span>
+      </header>
+      {content}
+    </section>
+  );
+  const exportCurrent = () => {
+    const source =
+      view === "Hosts"
+        ? hosts
+        : view === "Users"
+          ? users
+          : view === "Payments"
+            ? payments
+            : view === "Safety"
+              ? reports
+              : [];
+    const columns = source.length
+      ? Object.keys(source[0]).filter(
+          (key) => !["profile", "provider_payload"].includes(key),
+        )
+      : [];
+    const csv = [
+      columns.join(","),
+      ...source.map((row) =>
+        columns
+          .map((column) =>
+            JSON.stringify(
+              typeof row[column] === "object"
+                ? JSON.stringify(row[column])
+                : (row[column] ?? ""),
+            ),
+          )
+          .join(","),
+      ),
+    ].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `aasai-talk-${view.toLowerCase()}-report.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
   let reportContent: ReactNode;
-  if (view==="Hosts") reportContent=table("Host earnings and talk time","Actual duration · earnings · call mix",hosts.length?hosts.map((item)=><article key={String(item.phone)}><div><strong>{name(item)}</strong><small>{String(item.phone)}</small></div><b>{Number(item.talk_minutes||0)} min</b><b>₹{Number(item.earned_paise||0)/100}</b><span>{Number(item.calls||0)} calls · {Number(item.audio_calls||0)} audio · {Number(item.video_calls||0)} video</span></article>):<p className="admin-empty">No Host activity matches this search.</p>);
-  else if (view==="Users") reportContent=table("User spend and talk time","Actual duration · coins · call mix",users.length?users.map((item)=><article key={String(item.phone)}><div><strong>{name(item)}</strong><small>{String(item.phone)}</small></div><b>{Number(item.talk_minutes||0)} min</b><b>{Number(item.spent_coins||0)} coins</b><span>{Number(item.calls||0)} calls · {Number(item.audio_calls||0)} audio · {Number(item.video_calls||0)} video</span></article>):<p className="admin-empty">No user activity matches this search.</p>);
-  else if (view==="Payments") reportContent=table("Payment reconciliation","Latest Razorpay orders in the selected period",payments.length?payments.map((item)=><article key={String(item.id)}><div><strong>{String(item.phone||"Unknown user")}</strong><small>{formatDateTime(String(item.created_at||""))}</small></div><b>{Number(item.coins||0)} coins</b><b>₹{Number(item.amount_paise||0)/100}</b><span><em className={`report-status ${String(item.status||"").toLowerCase()}`}>{String(item.status||"Unknown")}</em>{item.credited_at?" · Wallet credited":" · Wallet not credited"}</span></article>):<p className="admin-empty">No payment orders match this search.</p>);
-  else if (view==="Safety") reportContent=table("Safety report queue","Reports submitted in the selected period",reports.length?reports.map((item)=><article key={String(item.id)}><div><strong>{String(item.reported_user_name||"Unknown user")}</strong><small>Reported by {String(item.reporter_name||"Unknown")} · {formatDateTime(String(item.created_at||""))}</small></div><b>{String(item.reason||"No reason")}</b><b><em className={`report-status ${String(item.status||"").toLowerCase().replaceAll(" ","-")}`}>{String(item.status||"Unknown")}</em></b><span>{String(item.resolution_note||"No resolution note yet")}</span></article>):<p className="admin-empty">No safety reports match this search.</p>);
-  else reportContent=<section className="report-snapshot-grid"><article className="panel"><p className="eyebrow">CALL DELIVERY</p><h2>{Number(summary.calls_completed||0)} completed calls</h2><p>{Number(summary.call_minutes||0)} actual minutes · {Number(summary.audio_calls||0)} audio · {Number(summary.video_calls||0)} video</p></article><article className="panel"><p className="eyebrow">MONEY MOVEMENT</p><h2>₹{Number(summary.payment_revenue_paise||0)/100} received</h2><p>₹{Number(summary.host_earnings_paise||0)/100} Host earnings · ₹{Number(summary.payouts_completed_paise||0)/100} paid out</p></article><article className="panel"><p className="eyebrow">SAFETY STATUS</p><h2>{Number(summary.reports_open||0)} reports awaiting action</h2><p>{Number(summary.reports_resolved||0)} resolved · {Number(summary.payouts_pending||0)} payouts pending</p></article></section>;
-  return <div className="report-center"><section className="report-hero"><div><p className="eyebrow accent">REPORT CENTER</p><h2>See the story behind your operations.</h2><p>Choose a report, then use the period selector to review live Aasai Talk activity.</p></div><div className="report-period"><select value={range} onChange={(event)=>setRange(event.target.value as typeof range)}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option><option value="custom">Custom dates</option></select>{range==="custom"&&<><input type="date" value={start} onChange={(event)=>setStart(event.target.value)} /><input type="date" value={end} min={start||undefined} onChange={(event)=>setEnd(event.target.value)} /></>}</div></section><nav className="report-tabs">{tabs.map((tab)=><button key={tab} className={view===tab?"active":""} onClick={()=>{setView(tab);setTableSearch("");}}>{tab}</button>)}{view!=="Executive"&&<button className="report-export" onClick={exportCurrent} disabled={!data}>Export CSV</button>}</nav>{view!=="Executive"&&<label className="report-table-search"><span>⌕</span><input value={tableSearch} onChange={(event)=>setTableSearch(event.target.value)} placeholder={`Search ${view.toLowerCase()} report by name, phone, status or detail`} /></label>}{!data&&!error?<section className="panel page-loader-panel"><PortalLoader label="Building live report" /></section>:<><section className="report-cards">{cards.map(([label,value,note],index)=><Metric key={String(label)} label={String(label)} value={String(value??0)} note={String(note)} tone={["coral","gold","violet","mint"][index%4]} />)}</section>{reportContent}</>}{error&&<p className="login-message">{error}</p>}</div>;
+  if (view === "Hosts")
+    reportContent = table(
+      "Host earnings and talk time",
+      "Actual duration · earnings · call mix",
+      hosts.length ? (
+        hosts.map((item) => (
+          <article key={String(item.phone)}>
+            <div>
+              <strong>{name(item)}</strong>
+              <small>{String(item.phone)}</small>
+            </div>
+            <b>{Number(item.talk_minutes || 0)} min</b>
+            <b>₹{Number(item.earned_paise || 0) / 100}</b>
+            <span>
+              {Number(item.calls || 0)} calls · {Number(item.audio_calls || 0)}{" "}
+              audio · {Number(item.video_calls || 0)} video
+            </span>
+          </article>
+        ))
+      ) : (
+        <p className="admin-empty">No Host activity matches this search.</p>
+      ),
+    );
+  else if (view === "Users")
+    reportContent = table(
+      "User spend and talk time",
+      "Actual duration · coins · call mix",
+      users.length ? (
+        users.map((item) => (
+          <article key={String(item.phone)}>
+            <div>
+              <strong>{name(item)}</strong>
+              <small>{String(item.phone)}</small>
+            </div>
+            <b>{Number(item.talk_minutes || 0)} min</b>
+            <b>{Number(item.spent_coins || 0)} coins</b>
+            <span>
+              {Number(item.calls || 0)} calls · {Number(item.audio_calls || 0)}{" "}
+              audio · {Number(item.video_calls || 0)} video
+            </span>
+          </article>
+        ))
+      ) : (
+        <p className="admin-empty">No user activity matches this search.</p>
+      ),
+    );
+  else if (view === "Payments")
+    reportContent = table(
+      "Payment reconciliation",
+      "Latest Razorpay orders in the selected period",
+      payments.length ? (
+        payments.map((item) => (
+          <article key={String(item.id)}>
+            <div>
+              <strong>{String(item.phone || "Unknown user")}</strong>
+              <small>{formatDateTime(String(item.created_at || ""))}</small>
+            </div>
+            <b>{Number(item.coins || 0)} coins</b>
+            <b>₹{Number(item.amount_paise || 0) / 100}</b>
+            <span>
+              <em
+                className={`report-status ${String(item.status || "").toLowerCase()}`}
+              >
+                {String(item.status || "Unknown")}
+              </em>
+              {item.credited_at
+                ? " · Wallet credited"
+                : " · Wallet not credited"}
+            </span>
+          </article>
+        ))
+      ) : (
+        <p className="admin-empty">No payment orders match this search.</p>
+      ),
+    );
+  else if (view === "Safety")
+    reportContent = table(
+      "Safety report queue",
+      "Reports submitted in the selected period",
+      reports.length ? (
+        reports.map((item) => (
+          <article key={String(item.id)}>
+            <div>
+              <strong>
+                {String(item.reported_user_name || "Unknown user")}
+              </strong>
+              <small>
+                Reported by {String(item.reporter_name || "Unknown")} ·{" "}
+                {formatDateTime(String(item.created_at || ""))}
+              </small>
+            </div>
+            <b>{String(item.reason || "No reason")}</b>
+            <b>
+              <em
+                className={`report-status ${String(item.status || "")
+                  .toLowerCase()
+                  .replaceAll(" ", "-")}`}
+              >
+                {String(item.status || "Unknown")}
+              </em>
+            </b>
+            <span>
+              {String(item.resolution_note || "No resolution note yet")}
+            </span>
+          </article>
+        ))
+      ) : (
+        <p className="admin-empty">No safety reports match this search.</p>
+      ),
+    );
+  else
+    reportContent = (
+      <section className="report-snapshot-grid">
+        <article className="panel">
+          <p className="eyebrow">CALL DELIVERY</p>
+          <h2>{Number(summary.calls_completed || 0)} completed calls</h2>
+          <p>
+            {Number(summary.call_minutes || 0)} actual minutes ·{" "}
+            {Number(summary.audio_calls || 0)} audio ·{" "}
+            {Number(summary.video_calls || 0)} video
+          </p>
+        </article>
+        <article className="panel">
+          <p className="eyebrow">MONEY MOVEMENT</p>
+          <h2>₹{Number(summary.payment_revenue_paise || 0) / 100} received</h2>
+          <p>
+            ₹{Number(summary.host_earnings_paise || 0) / 100} Host earnings · ₹
+            {Number(summary.payouts_completed_paise || 0) / 100} paid out
+          </p>
+        </article>
+        <article className="panel">
+          <p className="eyebrow">SAFETY STATUS</p>
+          <h2>{Number(summary.reports_open || 0)} reports awaiting action</h2>
+          <p>
+            {Number(summary.reports_resolved || 0)} resolved ·{" "}
+            {Number(summary.payouts_pending || 0)} payouts pending
+          </p>
+        </article>
+      </section>
+    );
+  return (
+    <div className="report-center">
+      <section className="report-hero">
+        <div>
+          <p className="eyebrow accent">REPORT CENTER</p>
+          <h2>See the story behind your operations.</h2>
+          <p>
+            Choose a report, then use the period selector to review live Aasai
+            Talk activity.
+          </p>
+        </div>
+        <div className="report-period">
+          <select
+            value={range}
+            onChange={(event) => setRange(event.target.value as typeof range)}
+          >
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="all">All time</option>
+            <option value="custom">Custom dates</option>
+          </select>
+          {range === "custom" && (
+            <>
+              <input
+                type="date"
+                value={start}
+                onChange={(event) => setStart(event.target.value)}
+              />
+              <input
+                type="date"
+                value={end}
+                min={start || undefined}
+                onChange={(event) => setEnd(event.target.value)}
+              />
+            </>
+          )}
+        </div>
+      </section>
+      <nav className="report-tabs">
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            className={view === tab ? "active" : ""}
+            onClick={() => {
+              setView(tab);
+              setTableSearch("");
+            }}
+          >
+            {tab}
+          </button>
+        ))}
+        {view !== "Executive" && (
+          <button
+            className="report-export"
+            onClick={exportCurrent}
+            disabled={!data}
+          >
+            Export CSV
+          </button>
+        )}
+      </nav>
+      {view !== "Executive" && (
+        <label className="report-table-search">
+          <span>⌕</span>
+          <input
+            value={tableSearch}
+            onChange={(event) => setTableSearch(event.target.value)}
+            placeholder={`Search ${view.toLowerCase()} report by name, phone, status or detail`}
+          />
+        </label>
+      )}
+      {!data && !error ? (
+        <section className="panel page-loader-panel">
+          <PortalLoader label="Building live report" />
+        </section>
+      ) : (
+        <>
+          <section className="report-cards">
+            {cards.map(([label, value, note], index) => (
+              <Metric
+                key={String(label)}
+                label={String(label)}
+                value={String(value ?? 0)}
+                note={String(note)}
+                tone={["coral", "gold", "violet", "mint"][index % 4]}
+              />
+            ))}
+          </section>
+          {reportContent}
+        </>
+      )}
+      {error && <p className="login-message">{error}</p>}
+    </div>
+  );
 }
-function Metric({ label, value, note, tone }: { label: string; value: string; note: string; tone: string }) { return <article className={`metric ${tone}`}><p>{label}</p><strong>{value}</strong><span>{note}</span></article>; }
-type LiveSection = "Hosts" | "Payouts" | "Payments" | "Users" | "Reports" | "Coin packs" | "Audit log";
-const listActions: Record<LiveSection, string> = { Hosts: "list_hosts", Payouts: "list_payouts", Payments: "list_payments", Users: "list_users", Reports: "list_safety", "Coin packs": "list_coin_packs", "Audit log": "list_audit_logs" };
-async function adminRequest(session: Session, action: string, payload: Record<string, unknown> = {}) {
-  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-portal`, { method: "POST", headers: { "Content-Type": "application/json", apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ action, ...payload }) });
-  const data = await response.json(); if (!response.ok) throw new Error(data.error || "The request could not be completed."); return data;
+function Metric({
+  label,
+  value,
+  note,
+  tone,
+}: {
+  label: string;
+  value: string;
+  note: string;
+  tone: string;
+}) {
+  return (
+    <article className={`metric ${tone}`}>
+      <p>{label}</p>
+      <strong>{value}</strong>
+      <span>{note}</span>
+    </article>
+  );
+}
+type LiveSection =
+  | "Hosts"
+  | "Payouts"
+  | "Payments"
+  | "Users"
+  | "Reports"
+  | "Support"
+  | "Coin packs"
+  | "Audit log";
+const listActions: Record<LiveSection, string> = {
+  Hosts: "list_hosts",
+  Payouts: "list_payouts",
+  Payments: "list_payments",
+  Users: "list_users",
+  Reports: "list_safety",
+  Support: "list_support_tickets",
+  "Coin packs": "list_coin_packs",
+  "Audit log": "list_audit_logs",
+};
+async function adminRequest(
+  session: Session,
+  action: string,
+  payload: Record<string, unknown> = {},
+) {
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-portal`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ action, ...payload }),
+    },
+  );
+  const data = await response.json();
+  if (!response.ok)
+    throw new Error(data.error || "The request could not be completed.");
+  return data;
 }
 function formatDateTime(value: string) {
-  const date = new Date(value); if (!value || Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }).format(date);
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Kolkata",
+  }).format(date);
 }
 function formatDate(value: unknown) {
   if (typeof value !== "string" || !value) return "—";
-  const date = new Date(value.includes("T") ? value : `${value}T00:00:00`); if (Number.isNaN(date.getTime())) return "—";
+  const date = new Date(value.includes("T") ? value : `${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(date);
 }
-function RecordDetails({ section, item, open = false }: { section: LiveSection; item: Record<string, unknown>; open?: boolean }) {
-  if (!["Hosts", "Payouts", "Payments", "Users", "Reports", "Audit log"].includes(section)) return null;
-  const profile = item.profile && typeof item.profile === "object" ? item.profile as Record<string, unknown> : item;
-  const application = item.application_profile && typeof item.application_profile === "object" ? item.application_profile as Record<string, unknown> : {};
-  const account = item.bank_account && typeof item.bank_account === "object" ? item.bank_account as Record<string, unknown> : {};
+function RecordDetails({
+  section,
+  item,
+  open = false,
+}: {
+  section: LiveSection;
+  item: Record<string, unknown>;
+  open?: boolean;
+}) {
+  if (
+    ![
+      "Hosts",
+      "Payouts",
+      "Payments",
+      "Users",
+      "Reports",
+      "Support",
+      "Audit log",
+    ].includes(section)
+  )
+    return null;
+  const profile =
+    item.profile && typeof item.profile === "object"
+      ? (item.profile as Record<string, unknown>)
+      : item;
+  const application =
+    item.application_profile && typeof item.application_profile === "object"
+      ? (item.application_profile as Record<string, unknown>)
+      : {};
+  const account =
+    item.bank_account && typeof item.bank_account === "object"
+      ? (item.bank_account as Record<string, unknown>)
+      : {};
   const isReport = section === "Reports";
-  const rows: [string, unknown][] = section === "Audit log" ? [["Action", item.action], ["Entity", item.entity_type], ["Record ID", item.entity_id], ["Admin ID", item.admin_user_id], ["Before", item.before_state ? JSON.stringify(item.before_state) : "No earlier value"], ["After", item.after_state ? JSON.stringify(item.after_state) : "No new value"], ["Date & time", formatDateTime(String(item.created_at || ""))]] : isReport ? [["Reported user", item.reported_user_name], ["Reporter", item.reporter_name], ["Reason", item.reason], ["Details", item.details], ["Submitted", formatDateTime(String(item.created_at || ""))]] : [["Mobile", profile.phone || item.phone || item.host_phone], ["Name", profile.display_name], ["Username", profile.username], ["Gender", profile.gender], ["Date of birth", formatDate(profile.date_of_birth)], ["City", profile.city], ["Bio", profile.bio], ["Languages", Array.isArray(profile.languages) ? profile.languages.join(", ") : profile.languages], ["Interests", Array.isArray(profile.interests) ? profile.interests.join(", ") : profile.interests], ["Joined", formatDateTime(String(profile.created_at || item.created_at || ""))]];
-  if (section === "Hosts") rows.push(["Host application", item.status], ["Submitted", formatDateTime(String(item.submitted_at || ""))], ["Aadhaar document", application.aadhaarDocument || "No securely stored file"], ["PAN document", application.panDocument || "No securely stored file"]);
-  if (section === "Payments") rows.push(["Coins", item.coins], ["Amount", `₹${Number(item.amount_paise || 0) / 100}`], ["Cashfree order", item.provider_order_id], ["Cashfree payment", item.provider_payment_id || "Not paid"], ["Captured", formatDateTime(String(item.captured_at || ""))], ["Wallet credited", formatDateTime(String(item.credited_at || ""))]);
+  const rows: [string, unknown][] =
+    section === "Audit log"
+      ? [
+          ["Action", item.action],
+          ["Entity", item.entity_type],
+          ["Record ID", item.entity_id],
+          ["Admin ID", item.admin_user_id],
+          [
+            "Before",
+            item.before_state
+              ? JSON.stringify(item.before_state)
+              : "No earlier value",
+          ],
+          [
+            "After",
+            item.after_state
+              ? JSON.stringify(item.after_state)
+              : "No new value",
+          ],
+          ["Date & time", formatDateTime(String(item.created_at || ""))],
+        ]
+      : isReport
+        ? [
+            ["Reported user", item.reported_user_name],
+            ["Reporter", item.reporter_name],
+            ["Reason", item.reason],
+            ["Details", item.details],
+            ["Submitted", formatDateTime(String(item.created_at || ""))],
+          ]
+        : [
+            ["Mobile", profile.phone || item.phone || item.host_phone],
+            ["Name", profile.display_name],
+            ["Username", profile.username],
+            ["Gender", profile.gender],
+            ["Date of birth", formatDate(profile.date_of_birth)],
+            ["City", profile.city],
+            ["Bio", profile.bio],
+            [
+              "Languages",
+              Array.isArray(profile.languages)
+                ? profile.languages.join(", ")
+                : profile.languages,
+            ],
+            [
+              "Interests",
+              Array.isArray(profile.interests)
+                ? profile.interests.join(", ")
+                : profile.interests,
+            ],
+            [
+              "Joined",
+              formatDateTime(
+                String(profile.created_at || item.created_at || ""),
+              ),
+            ],
+          ];
+  if (section === "Hosts")
+    rows.push(
+      ["Host application", item.status],
+      ["New lead", item.is_new ? "Joined within the last 24 hours" : "No"],
+      ["Submitted", formatDateTime(String(item.submitted_at || ""))],
+      [
+        "Aadhaar document",
+        application.aadhaarDocument || "No securely stored file",
+      ],
+      ["PAN document", application.panDocument || "No securely stored file"],
+    );
+  if (section === "Payments")
+    rows.push(
+      ["Coins", item.coins],
+      ["Amount", `₹${Number(item.amount_paise || 0) / 100}`],
+      ["Cashfree order", item.provider_order_id],
+      ["Cashfree payment", item.provider_payment_id || "Not paid"],
+      ["Captured", formatDateTime(String(item.captured_at || ""))],
+      ["Wallet credited", formatDateTime(String(item.credited_at || ""))],
+    );
   if (section === "Payouts" || section === "Hosts") {
     const method = account.payout_method === "upi" ? "UPI ID" : "Bank account";
-    rows.push(["Payout method", method], ["Account holder", account.account_holder_name || "Not saved"]);
-    if (account.payout_method === "upi") rows.push(["UPI ID", account.upi_id || "Not available"]);
-    else rows.push(["Bank account number", account.account_number || "Not available"], ["IFSC", account.ifsc_code || "Not available"]);
+    rows.push(
+      ["Payout method", method],
+      ["Account holder", account.account_holder_name || "Not saved"],
+    );
+    if (account.payout_method === "upi")
+      rows.push(["UPI ID", account.upi_id || "Not available"]);
+    else
+      rows.push(
+        ["Bank account number", account.account_number || "Not available"],
+        ["IFSC", account.ifsc_code || "Not available"],
+      );
     rows.push(["Destination verification", account.status || "Not submitted"]);
   }
-  const avatar = typeof profile.avatar_url === "string" ? profile.avatar_url : "";
-  const notes = Array.isArray(item.moderation_notes) ? item.moderation_notes as Record<string, unknown>[] : [];
-  if (isReport && item.resolution_note) rows.push(["Decision note", item.resolution_note]);
-  return <details className="record-details" open={open}><summary>{open ? "Record details" : "View details"}</summary><div className="detail-card">{avatar && <img src={avatar} alt="Profile" />}<dl>{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{String(value || "—")}</dd></div>)}</dl>{isReport && <div className="moderation-timeline"><strong>Internal notes</strong>{notes.length ? notes.map((note) => <p key={String(note.id)}><span>{formatDateTime(String(note.created_at || ""))}</span>{String(note.note || "")}</p>) : <small>No internal notes yet.</small>}</div>}</div></details>;
+  if (section === "Payouts")
+    rows.push(
+      ["Payment reference / UTR", item.payout_reference || "Not recorded"],
+      ["Internal payment note", item.review_note || "Not recorded"],
+      [
+        "Payment recorded",
+        item.status === "completed"
+          ? formatDateTime(String(item.updated_at || ""))
+          : "Not confirmed",
+      ],
+    );
+  if (section === "Hosts") {
+    const compliance =
+      item.compliance && typeof item.compliance === "object"
+        ? (item.compliance as Record<string, unknown>)
+        : {};
+    rows.push(
+      [
+        "PAN verification",
+        compliance.pan_verified
+          ? `Verified ••••${String(compliance.pan_last4 || "")}`
+          : "Not verified",
+      ],
+      [
+        "Aadhaar verification",
+        compliance.aadhaar_verified
+          ? `Verified ••••${String(compliance.aadhaar_last4 || "")}`
+          : "Not verified",
+      ],
+    );
+  }
+  if (section === "Support")
+    rows.push(
+      ["Subject", item.subject],
+      ["Category", item.category],
+      ["Status", String(item.status || "").replaceAll("_", " ")],
+      ["Opened", formatDateTime(String(item.created_at || ""))],
+      ["Last updated", formatDateTime(String(item.updated_at || ""))],
+      ["Resolved", formatDateTime(String(item.resolved_at || ""))],
+    );
+  const avatar =
+    typeof profile.avatar_url === "string" ? profile.avatar_url : "";
+  const notes = Array.isArray(item.moderation_notes)
+    ? (item.moderation_notes as Record<string, unknown>[])
+    : [];
+  if (isReport && item.resolution_note)
+    rows.push(["Decision note", item.resolution_note]);
+  const messages = Array.isArray(item.messages)
+    ? (item.messages as Record<string, unknown>[])
+    : [];
+  return (
+    <details className="record-details" open={open}>
+      <summary>{open ? "Record details" : "View details"}</summary>
+      <div className="detail-card">
+        {avatar && <img src={avatar} alt="Profile" />}
+        <dl>
+          {rows.map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{String(value || "—")}</dd>
+            </div>
+          ))}
+        </dl>
+        {section === "Support" && (
+          <div className="moderation-timeline">
+            <strong>Conversation</strong>
+            {messages.length ? (
+              messages.map((item) => (
+                <p key={String(item.id)}>
+                  <span>
+                    {String(item.sender_type) === "member"
+                      ? "Member"
+                      : "Support"}{" "}
+                    · {formatDateTime(String(item.created_at || ""))}
+                  </span>
+                  {String(item.message || "")}
+                </p>
+              ))
+            ) : (
+              <small>No messages yet.</small>
+            )}
+          </div>
+        )}
+        {isReport && (
+          <div className="moderation-timeline">
+            <strong>Internal notes</strong>
+            {notes.length ? (
+              notes.map((note) => (
+                <p key={String(note.id)}>
+                  <span>{formatDateTime(String(note.created_at || ""))}</span>
+                  {String(note.note || "")}
+                </p>
+              ))
+            ) : (
+              <small>No internal notes yet.</small>
+            )}
+          </div>
+        )}
+      </div>
+    </details>
+  );
 }
-function LiveWorkspace({ section, session, query }: { section: LiveSection; session: Session; query: string }) {
-  const [items, setItems] = useState<Record<string, unknown>[]>([]); const [loading, setLoading] = useState(true); const [refreshing,setRefreshing]=useState(false); const [hasLoaded,setHasLoaded]=useState(false); const [lastUpdated,setLastUpdated]=useState<Date|null>(null); const [saving, setSaving] = useState<string | null>(null); const [error, setError] = useState(""); const [notice,setNotice]=useState(""); const [localSearch,setLocalSearch]=useState(""); const [statusFilter,setStatusFilter]=useState("all"); const [sort,setSort]=useState<"newest"|"oldest">("newest"); const [page,setPage]=useState(1); const [selected,setSelected]=useState<Record<string,unknown>|null>(null); const [noteTarget,setNoteTarget]=useState<Record<string,unknown>|null>(null); const [noteDraft,setNoteDraft]=useState("");
-  const load = async (initial = false) => { if(initial || !hasLoaded) setLoading(true); else setRefreshing(true); setError(""); try { const data = await adminRequest(session, listActions[section]); setItems(data.items || []); setHasLoaded(true); setLastUpdated(new Date()); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load records."); } finally { setLoading(false); setRefreshing(false); } };
-  const act = async (action: string, item: Record<string, unknown>, payload: Record<string, unknown>, success = "Action saved.") => { const id = String(item.id || item.phone || ""); setSaving(id); setError(""); setNotice(""); try { await adminRequest(session, action, payload); await load(); setNotice(success); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save the action."); } finally { setSaving(null); } };
-  const viewDocument = async (item: Record<string, unknown>, kind: "aadhaar" | "pan") => { const id = String(item.id || ""); const documentWindow = window.open("", "_blank"); setSaving(id); setError(""); try { const data = await adminRequest(session, "host_document_url", { id, kind }); if (documentWindow) documentWindow.location.href = String(data.url); else window.location.assign(String(data.url)); } catch (cause) { documentWindow?.close(); setError(cause instanceof Error ? cause.message : "Unable to open the document."); } finally { setSaving(null); } };
-  useEffect(() => { setHasLoaded(false); void load(true); setLocalSearch(""); setStatusFilter("all"); setSort(section === "Payouts" ? "oldest" : "newest"); setPage(1); setSelected(null); setNoteTarget(null); }, [section]);
-  useEffect(() => { const refreshWhenReturning=()=>{if(document.visibilityState === "visible" && hasLoaded) void load();}; window.addEventListener("focus",refreshWhenReturning); document.addEventListener("visibilitychange",refreshWhenReturning); return()=>{window.removeEventListener("focus",refreshWhenReturning);document.removeEventListener("visibilitychange",refreshWhenReturning);}; }, [section,hasLoaded]);
-  const openPayout=(item:Record<string,unknown>)=>["pending","in_review","processing"].includes(String(item.status||"")); const overduePayout=(item:Record<string,unknown>)=>section === "Payouts" && openPayout(item) && typeof item.review_due_at === "string" && Date.parse(item.review_due_at) <= Date.now(); const overdueCount=items.filter(overduePayout).length;
-  const allQuery=`${query} ${localSearch}`.trim().toLowerCase(); const statuses=[...new Set(items.map((item)=>String(item.status||item.account_status||"active")))].sort(); const filteredRows=items.filter((item)=>JSON.stringify(item).toLowerCase().includes(allQuery) && (statusFilter==="all"||String(item.status||item.account_status||"active")===statusFilter)).sort((a,b)=>{const one=String(a.created_at||a.submitted_at||"");const two=String(b.created_at||b.submitted_at||"");if(section === "Payouts"){if(overduePayout(a)!==overduePayout(b))return overduePayout(a)?-1:1;if(openPayout(a)!==openPayout(b))return openPayout(a)?-1:1;}return sort==="newest"?two.localeCompare(one):one.localeCompare(two);}); const perPage=12; const pages=Math.max(1,Math.ceil(filteredRows.length/perPage)); const rows=filteredRows.slice((page-1)*perPage,page*perPage);
-  const profile = (item: Record<string, unknown>) => item.profile && typeof item.profile === "object" ? item.profile as Record<string, unknown> : {};
-  const title = (item: Record<string, unknown>) => String(profile(item).display_name || item.display_name || item.reported_user_name || item.action || item.special_label || item.phone || item.host_phone || item.id);
-  const detail = (item: Record<string, unknown>) => { const value = String(item.status || item.account_status || item.username || item.reason || item.entity_type || (item.coins ? `${item.coins} coins` : "—")); if(section === "Payouts"){const label=value === "pending" ? "Pending review" : value === "in_review" || value === "processing" ? "In review" : value === "completed" ? "Amount sent" : value === "rejected" ? "Rejected — earnings returned" : value === "failed" ? "Payment failed — earnings returned" : value;return overduePayout(item)?`Overdue — ${label}`:label;} return value === "archived" ? "Deleted" : value; };
-  const statusLabel = (status: string) => section === "Payouts" ? (status === "pending" ? "Pending review" : status === "in_review" || status === "processing" ? "In review" : status === "completed" ? "Amount sent" : status === "rejected" ? "Rejected" : status === "failed" ? "Payment failed" : status) : status;
-  const date = (item: Record<string, unknown>) => section === "Payouts" ? `₹${Number(item.amount_paise || 0) / 100} · Requested ${formatDateTime(String(item.created_at || ""))}${item.review_due_at ? ` · Review by ${formatDateTime(String(item.review_due_at))}` : ""}` : section === "Coin packs" ? `₹${Number(item.price_paise || 0) / 100} · ${item.active ? "Active" : "Inactive"}` : formatDateTime(String(item.created_at || item.submitted_at || ""));
+function LiveWorkspace({
+  section,
+  session,
+  query,
+}: {
+  section: LiveSection;
+  session: Session;
+  query: string;
+}) {
+  const [items, setItems] = useState<Record<string, unknown>[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [localSearch, setLocalSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sort, setSort] = useState<"newest" | "oldest">("newest");
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Record<string, unknown> | null>(
+    null,
+  );
+  const [noteTarget, setNoteTarget] = useState<Record<string, unknown> | null>(
+    null,
+  );
+  const [noteDraft, setNoteDraft] = useState("");
+  const [supportResolve, setSupportResolve] = useState(false);
+  const [payoutAction, setPayoutAction] = useState<PayoutAction | null>(null);
+  const [hostAssistTarget, setHostAssistTarget] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const load = async (initial = false) => {
+    if (initial || !hasLoaded) setLoading(true);
+    else setRefreshing(true);
+    setError("");
+    try {
+      const data = await adminRequest(session, listActions[section]);
+      setItems(data.items || []);
+      setHasLoaded(true);
+      setLastUpdated(new Date());
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Unable to load records.",
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+  const act = async (
+    action: string,
+    item: Record<string, unknown>,
+    payload: Record<string, unknown>,
+    success = "Action saved.",
+  ) => {
+    const id = String(item.id || item.phone || "");
+    setSaving(id);
+    setError("");
+    setNotice("");
+    try {
+      await adminRequest(session, action, payload);
+      await load();
+      setNotice(success);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Unable to save the action.",
+      );
+    } finally {
+      setSaving(null);
+    }
+  };
+  const viewDocument = async (
+    item: Record<string, unknown>,
+    kind: "aadhaar" | "pan",
+  ) => {
+    const id = String(item.id || "");
+    const documentWindow = window.open("", "_blank");
+    setSaving(id);
+    setError("");
+    try {
+      const data = await adminRequest(session, "host_document_url", {
+        id,
+        kind,
+      });
+      if (documentWindow) documentWindow.location.href = String(data.url);
+      else window.location.assign(String(data.url));
+    } catch (cause) {
+      documentWindow?.close();
+      setError(
+        cause instanceof Error ? cause.message : "Unable to open the document.",
+      );
+    } finally {
+      setSaving(null);
+    }
+  };
+  useEffect(() => {
+    setHasLoaded(false);
+    void load(true);
+    setLocalSearch("");
+    setStatusFilter("all");
+    setDateFrom("");
+    setDateTo("");
+    setSort(section === "Payouts" ? "oldest" : "newest");
+    setPage(1);
+    setSelected(null);
+    setNoteTarget(null);
+    setSupportResolve(false);
+    setPayoutAction(null);
+  }, [section]);
+  useEffect(() => {
+    const refreshWhenReturning = () => {
+      if (document.visibilityState === "visible" && hasLoaded) void load();
+    };
+    window.addEventListener("focus", refreshWhenReturning);
+    document.addEventListener("visibilitychange", refreshWhenReturning);
+    return () => {
+      window.removeEventListener("focus", refreshWhenReturning);
+      document.removeEventListener("visibilitychange", refreshWhenReturning);
+    };
+  }, [section, hasLoaded]);
+  const openPayout = (item: Record<string, unknown>) =>
+    ["pending", "in_review", "processing"].includes(String(item.status || ""));
+  const overduePayout = (item: Record<string, unknown>) =>
+    section === "Payouts" &&
+    openPayout(item) &&
+    typeof item.review_due_at === "string" &&
+    Date.parse(item.review_due_at) <= Date.now();
+  const overdueCount = items.filter(overduePayout).length;
+  const allQuery = `${query} ${localSearch}`.trim().toLowerCase();
+  const statuses = [
+    ...new Set(
+      items.map((item) =>
+        String(item.status || item.account_status || "active"),
+      ),
+    ),
+  ].sort();
+  const recordDate = (item: Record<string, unknown>) =>
+    String(item.created_at || item.submitted_at || "");
+  const filteredRows = items
+    .filter((item) => {
+      const value = recordDate(item);
+      const dateOnly = value.slice(0, 10);
+      return (
+        JSON.stringify(item).toLowerCase().includes(allQuery) &&
+        (statusFilter === "all" ||
+          String(item.status || item.account_status || "active") ===
+            statusFilter) &&
+        (!dateFrom || dateOnly >= dateFrom) &&
+        (!dateTo || dateOnly <= dateTo)
+      );
+    })
+    .sort((a, b) => {
+      const one = recordDate(a);
+      const two = recordDate(b);
+      if (section === "Payouts") {
+        if (overduePayout(a) !== overduePayout(b))
+          return overduePayout(a) ? -1 : 1;
+        if (openPayout(a) !== openPayout(b)) return openPayout(a) ? -1 : 1;
+      }
+      return sort === "newest"
+        ? two.localeCompare(one)
+        : one.localeCompare(two);
+    });
+  const perPage = 12;
+  const pages = Math.max(1, Math.ceil(filteredRows.length / perPage));
+  const rows = filteredRows.slice((page - 1) * perPage, page * perPage);
+  const profile = (item: Record<string, unknown>) =>
+    item.profile && typeof item.profile === "object"
+      ? (item.profile as Record<string, unknown>)
+      : {};
+  const title = (item: Record<string, unknown>) =>
+    String(
+      section === "Support"
+        ? item.subject || profile(item).display_name || item.phone || item.id
+        : profile(item).display_name ||
+            item.display_name ||
+            item.reported_user_name ||
+            item.action ||
+            item.special_label ||
+            item.phone ||
+            item.host_phone ||
+            item.id,
+    );
+  const detail = (item: Record<string, unknown>) => {
+    const value = String(
+      item.status ||
+        item.account_status ||
+        item.username ||
+        item.reason ||
+        item.entity_type ||
+        (item.coins ? `${item.coins} coins` : "—"),
+    );
+    if (section === "Payouts") {
+      const label =
+        value === "pending"
+          ? "Pending review"
+          : value === "in_review" || value === "processing"
+            ? "In review"
+            : value === "completed"
+              ? "Payment confirmed"
+              : value === "rejected"
+                ? "Rejected — earnings returned"
+                : value === "failed"
+                  ? "Payment failed — earnings returned"
+                  : value;
+      return overduePayout(item) ? `Overdue — ${label}` : label;
+    }
+    if (section === "Hosts" && String(item.status || "") === "new")
+      return item.is_new ? "New today · Not a Host yet" : "Not a Host yet";
+    if (section === "Support")
+      return `${String(item.category || "other")} · ${value.replaceAll("_", " ")}`;
+    return value === "archived" ? "Deleted" : value;
+  };
+  const statusLabel = (status: string) =>
+    section === "Payouts"
+      ? status === "pending"
+        ? "Pending review"
+        : status === "in_review" || status === "processing"
+          ? "In review"
+          : status === "completed"
+            ? "Payment confirmed"
+            : status === "rejected"
+              ? "Rejected"
+              : status === "failed"
+                ? "Payment failed"
+                : status
+      : status;
+  const date = (item: Record<string, unknown>) =>
+    section === "Payouts"
+      ? `₹${Number(item.amount_paise || 0) / 100} · Requested ${formatDateTime(String(item.created_at || ""))}${item.review_due_at ? ` · Review by ${formatDateTime(String(item.review_due_at))}` : ""}`
+      : section === "Coin packs"
+        ? `₹${Number(item.price_paise || 0) / 100} · ${item.active ? "Active" : "Inactive"}`
+        : section === "Hosts"
+          ? `Joined ${formatDateTime(String(profile(item).created_at || item.submitted_at || ""))}`
+          : formatDateTime(String(item.created_at || item.submitted_at || ""));
   const controls = (item: Record<string, unknown>) => {
-    const id = String(item.id || item.phone || ""); const disabled = saving === id;
-    if (section === "Hosts") { const status=String(item.status||""); if (status === "pending") return <div className="record-actions"><button onClick={() => void act("review_host", item, { id, status: "approved" })} disabled={disabled}>Approve</button><button onClick={() => void act("review_host", item, { id, status: "rejected" })} disabled={disabled}>Reject</button></div>; if (status === "archived") return <div className="record-actions"><button onClick={() => void act("review_host", item, { id, status: "approved" })} disabled={disabled}>Restore Host</button></div>; if (status === "inactive") return <div className="record-actions"><button onClick={() => void act("review_host", item, { id, status: "approved" })} disabled={disabled}>Activate Host</button><button onClick={() => void act("review_host", item, { id, status: "archived" })} disabled={disabled}>Delete Host</button></div>; return <div className="record-actions"><button onClick={() => void act("review_host", item, { id, status: "inactive" })} disabled={disabled}>Make inactive</button><button onClick={() => void act("review_host", item, { id, status: "archived" })} disabled={disabled}>Delete Host</button></div>; }
-    if (section === "Payouts") { const status=String(item.status||""); if (["completed","rejected","failed"].includes(status)) return <span className="action-complete">{status === "completed" ? "Amount sent" : "Closed"}</span>; return <div className="record-actions">{status === "pending" ? <button onClick={() => { const note=window.prompt("Internal review note (required):")?.trim(); if(note) void act("review_payout", item, { id, status: "in_review", note }, "Payout moved to In review."); }} disabled={disabled}>Start review</button> : <span className="action-complete">In review</span>}<button onClick={() => { const note=window.prompt("Reason for rejecting this payout?")?.trim(); if(note) void act("review_payout",item,{id,status:"rejected",note},"Payout rejected and earnings restored."); }} disabled={disabled}>Reject</button></div>; }
-    if (section === "Users") { const status=String(item.account_status||"active"); if(status === "archived") return <div className="record-actions"><button onClick={() => void act("set_user_status", item, { phone: item.phone, status: "active" })} disabled={disabled}>Restore user</button></div>; if(status === "inactive") return <div className="record-actions"><button onClick={() => void act("set_user_status", item, { phone: item.phone, status: "active" })} disabled={disabled}>Activate user</button><button onClick={() => void act("set_user_status", item, { phone: item.phone, status: "archived" })} disabled={disabled}>Delete user</button></div>; return <div className="record-actions"><button onClick={() => void act("set_user_status", item, { phone: item.phone, status: "inactive" })} disabled={disabled}>Make inactive</button><button onClick={() => void act("set_user_status", item, { phone: item.phone, status: "archived" })} disabled={disabled}>Delete user</button></div>; }
-    if (section === "Reports") { const status=String(item.status||""); if(["Resolved","Rejected"].includes(status)) return <span className="action-complete">{status}</span>; const close=(next:"Resolved"|"Rejected")=>{const note=window.prompt(`${next === "Resolved" ? "Resolution" : "Rejection"} note (required):`)?.trim();if(note) void act("review_safety",item,{id,status:next,note});}; return <div className="record-actions">{status !== "Under review" && <button onClick={() => void act("review_safety", item, { id, status: "Under review" })} disabled={disabled}>Review</button>}<button onClick={() => close("Resolved")} disabled={disabled}>Resolve</button><button onClick={() => close("Rejected")} disabled={disabled}>Reject</button></div>; }
+    const id = String(item.id || item.phone || "");
+    const disabled = saving === id;
+    if (section === "Hosts") {
+      const status = String(item.status || "");
+      if (status === "new")
+        return (
+          <div className="record-actions">
+            <button
+              onClick={() => setHostAssistTarget(item)}
+              disabled={disabled}
+            >
+              Set up Host
+            </button>
+          </div>
+        );
+      if (status === "pending")
+        return (
+          <div className="record-actions">
+            <button
+              onClick={() => setHostAssistTarget(item)}
+              disabled={disabled}
+            >
+              Update details
+            </button>
+            <button
+              onClick={() =>
+                void act("review_host", item, { id, status: "approved" })
+              }
+              disabled={disabled}
+            >
+              Approve
+            </button>
+            <button
+              onClick={() =>
+                void act("review_host", item, { id, status: "rejected" })
+              }
+              disabled={disabled}
+            >
+              Reject
+            </button>
+          </div>
+        );
+      if (status === "archived")
+        return (
+          <div className="record-actions">
+            <button
+              onClick={() =>
+                void act("review_host", item, { id, status: "approved" })
+              }
+              disabled={disabled}
+            >
+              Restore Host
+            </button>
+          </div>
+        );
+      if (status === "inactive")
+        return (
+          <div className="record-actions">
+            <button
+              onClick={() =>
+                void act("review_host", item, { id, status: "approved" })
+              }
+              disabled={disabled}
+            >
+              Activate Host
+            </button>
+            <button
+              onClick={() =>
+                void act("review_host", item, { id, status: "archived" })
+              }
+              disabled={disabled}
+            >
+              Delete Host
+            </button>
+          </div>
+        );
+      return (
+        <div className="record-actions">
+          <button
+            onClick={() =>
+              void act("review_host", item, { id, status: "inactive" })
+            }
+            disabled={disabled}
+          >
+            Make inactive
+          </button>
+          <button
+            onClick={() =>
+              void act("review_host", item, { id, status: "archived" })
+            }
+            disabled={disabled}
+          >
+            Delete Host
+          </button>
+        </div>
+      );
+    }
+    if (section === "Payouts") {
+      const status = String(item.status || "");
+      if (["completed", "rejected", "failed"].includes(status))
+        return (
+          <span className="action-complete">
+            {status === "completed" ? "Payment confirmed" : "Closed"}
+          </span>
+        );
+      return (
+        <div className="record-actions">
+          {status === "pending" ? (
+            <button
+              onClick={() => setPayoutAction({ item, mode: "review" })}
+              disabled={disabled}
+            >
+              Start review
+            </button>
+          ) : (
+            <span className="action-complete">In review</span>
+          )}
+          <button
+            onClick={() => setPayoutAction({ item, mode: "reject" })}
+            disabled={disabled}
+          >
+            Reject
+          </button>
+        </div>
+      );
+    }
+    if (section === "Users") {
+      const status = String(item.account_status || "active");
+      if (status === "archived")
+        return (
+          <div className="record-actions">
+            <button
+              onClick={() =>
+                void act("set_user_status", item, {
+                  phone: item.phone,
+                  status: "active",
+                })
+              }
+              disabled={disabled}
+            >
+              Restore user
+            </button>
+          </div>
+        );
+      if (status === "inactive")
+        return (
+          <div className="record-actions">
+            <button
+              onClick={() =>
+                void act("set_user_status", item, {
+                  phone: item.phone,
+                  status: "active",
+                })
+              }
+              disabled={disabled}
+            >
+              Activate user
+            </button>
+            <button
+              onClick={() =>
+                void act("set_user_status", item, {
+                  phone: item.phone,
+                  status: "archived",
+                })
+              }
+              disabled={disabled}
+            >
+              Delete user
+            </button>
+          </div>
+        );
+      return (
+        <div className="record-actions">
+          <button
+            onClick={() =>
+              void act("set_user_status", item, {
+                phone: item.phone,
+                status: "inactive",
+              })
+            }
+            disabled={disabled}
+          >
+            Make inactive
+          </button>
+          <button
+            onClick={() =>
+              void act("set_user_status", item, {
+                phone: item.phone,
+                status: "archived",
+              })
+            }
+            disabled={disabled}
+          >
+            Delete user
+          </button>
+        </div>
+      );
+    }
+    if (section === "Reports") {
+      const status = String(item.status || "");
+      if (["Resolved", "Rejected"].includes(status))
+        return <span className="action-complete">{status}</span>;
+      const close = (next: "Resolved" | "Rejected") => {
+        const note = window
+          .prompt(
+            `${next === "Resolved" ? "Resolution" : "Rejection"} note (required):`,
+          )
+          ?.trim();
+        if (note) void act("review_safety", item, { id, status: next, note });
+      };
+      return (
+        <div className="record-actions">
+          {status !== "Under review" && (
+            <button
+              onClick={() =>
+                void act("review_safety", item, { id, status: "Under review" })
+              }
+              disabled={disabled}
+            >
+              Review
+            </button>
+          )}
+          <button onClick={() => close("Resolved")} disabled={disabled}>
+            Resolve
+          </button>
+          <button onClick={() => close("Rejected")} disabled={disabled}>
+            Reject
+          </button>
+        </div>
+      );
+    }
+    if (section === "Support") {
+      const status = String(item.status || "");
+      if (status === "resolved")
+        return <span className="action-complete">Resolved</span>;
+      const compose = (resolve = false) => {
+        setSupportResolve(resolve);
+        setNoteTarget(item);
+        setNoteDraft("");
+      };
+      return (
+        <div className="record-actions">
+          {status === "open" && (
+            <button
+              onClick={() =>
+                void act(
+                  "review_support_ticket",
+                  item,
+                  { id },
+                  "Ticket moved to In review.",
+                )
+              }
+              disabled={disabled}
+            >
+              Start review
+            </button>
+          )}
+          <button onClick={() => compose(false)} disabled={disabled}>
+            Reply
+          </button>
+          <button onClick={() => compose(true)} disabled={disabled}>
+            Resolve
+          </button>
+        </div>
+      );
+    }
     return null;
   };
-  const hasDocument = (item: Record<string, unknown>, kind: "aadhaar" | "pan") => { const application = item.application_profile; const newerPath = application && typeof application === "object" ? (application as Record<string, unknown>)[`${kind}Path`] : undefined; const legacyPath = item[`${kind}_path`]; return (typeof newerPath === "string" && newerPath.length > 0) || (typeof legacyPath === "string" && legacyPath.length > 0); };
-  const extraControls = (item: Record<string, unknown>) => { const id=String(item.id||item.phone||""); const disabled=saving===id; const account=item.bank_account && typeof item.bank_account === "object" ? item.bank_account as Record<string,unknown> : null; const method=account?.payout_method === "upi" ? "UPI ID" : "bank account"; if(section==="Hosts" && account?.status === "pending_verification") return <div className="record-actions"><button disabled={disabled} onClick={() => void act("review_bank_account",item,{phone:item.phone,status:"verified"},`${method} verified.`)}>Verify {method}</button><button disabled={disabled} onClick={() => { const note=window.prompt(`Reason for rejecting this ${method}?`)?.trim(); if(note) void act("review_bank_account",item,{phone:item.phone,status:"rejected",note},`${method} rejected.`); }}>Reject {method}</button></div>; if(section==="Payments" && item.status === "captured" && !item.credited_at) return <div className="record-actions"><button disabled={disabled} onClick={() => { if(window.confirm("Credit these captured coins to this user wallet? This is audit logged and cannot be reversed here.")) void act("reconcile_payment",item,{id:item.id},"Wallet credited successfully."); }}>Credit wallet</button></div>; if(section==="Payouts" && ["in_review", "processing"].includes(String(item.status||""))) return <div className="record-actions"><button disabled={disabled} onClick={() => { const reference=window.prompt("Enter transfer reference / UTR:")?.trim(); if(!reference)return; const note=window.prompt("Enter reviewer note:")?.trim(); if(!note)return; if(window.confirm("Confirm that you have sent this manual payout? This finalizes the withdrawal.")) void act("review_payout",item,{id:item.id,status:"completed",reference,note},"Payment marked Amount sent and audit logged."); }}>Mark amount sent</button><button disabled={disabled} onClick={() => { const note=window.prompt("Why did this payment fail? (required)")?.trim(); if(note&&window.confirm("Mark this payment failed and return the reserved earnings to the Host?")) void act("review_payout",item,{id:item.id,status:"failed",note},"Payment marked failed and earnings restored."); }}>Mark failed</button></div>; if(section==="Reports") return <div className="record-actions"><button disabled={disabled} onClick={() => { setNoteTarget(item); setNoteDraft(""); }}>Add note</button></div>; return null; };
-  const exportRows=()=>{const values=filteredRows.map((item)=>({name:title(item),status:detail(item),date:date(item),phone:String(profile(item).phone||item.phone||item.host_phone||""),amount:item.amount_paise?Number(item.amount_paise)/100:""}));const headers=Object.keys(values[0]||{name:"",status:"",date:"",phone:"",amount:""});const csv=[headers.join(","),...values.map((row)=>headers.map((header)=>JSON.stringify(row[header as keyof typeof row]??"")).join(","))].join("\n");const url=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));const link=document.createElement("a");link.href=url;link.download=`aasai-talk-${section.toLowerCase().replaceAll(" ","-")}.csv`;link.click();URL.revokeObjectURL(url);};
-  const saveNote=()=>{if(noteTarget&&noteDraft.trim())void act("add_moderation_note",noteTarget,{entity_type:"safety_report",entity_id:noteTarget.id,note:noteDraft.trim()},"Internal note saved.").then(()=>{setNoteDraft("");setNoteTarget(null);});};
-  return <><div className="panel live-workspace"><div className="panel-heading"><div><p className="eyebrow">LIVE DATA</p><h2>{section}{section === "Audit log" ? "" : " operations"}</h2><p>{section === "Payouts" ? overdueCount ? `${overdueCount} overdue request${overdueCount === 1 ? "" : "s"} needs attention. Open requests are prioritised oldest first.` : "Open requests are prioritised oldest first so you can meet the review target." : "Protected records from Supabase."}</p></div><div className="workspace-heading-actions"><small aria-live="polite">{refreshing ? "Refreshing…" : lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` : ""}</small><button className="outline-button" onClick={exportRows} disabled={loading||!filteredRows.length}>Export CSV</button><button className="outline-button" onClick={() => void load()} disabled={loading||refreshing}>{refreshing ? "Refreshing…" : "Refresh"}</button></div></div><div className="workspace-tools"><label><span>⌕</span><input value={localSearch} onChange={(event)=>{setLocalSearch(event.target.value);setPage(1);}} placeholder={`Search ${section.toLowerCase()}`} /></label><select value={statusFilter} onChange={(event)=>{setStatusFilter(event.target.value);setPage(1);}}><option value="all">All statuses</option>{statuses.map((status)=><option key={status} value={status}>{statusLabel(status)}</option>)}</select><select value={sort} onChange={(event)=>setSort(event.target.value as "newest"|"oldest")}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select><small>{filteredRows.length} records</small></div>{noteTarget&&<section className="case-composer"><div><strong>Add internal note</strong><span>{title(noteTarget)}</span></div><textarea value={noteDraft} onChange={(event)=>setNoteDraft(event.target.value)} placeholder="Write a clear internal note for the moderation timeline…" maxLength={2000} /><div><button className="outline-button" onClick={()=>{setNoteTarget(null);setNoteDraft("");}} disabled={saving!==null}>Cancel</button><button className="primary-button" onClick={saveNote} disabled={!noteDraft.trim()||saving!==null}>{saving?"Saving…":"Save note"}</button></div></section>}{loading ? <PortalLoader label={`Loading ${section.toLowerCase()}`} /> : <div className="live-list">{rows.map((item) => <article key={String(item.id || item.phone)}><div><strong>{title(item)}</strong><span>{detail(item)}</span><small>{date(item)}</small><button className="detail-trigger" onClick={()=>setSelected(item)}>Open details</button></div><div className="record-control-stack">{controls(item)}{extraControls(item)}{section === "Hosts" && <div className="host-document-actions"><div className="record-actions"><button onClick={() => void viewDocument(item, "aadhaar")} disabled={saving === String(item.id) || !hasDocument(item, "aadhaar")} title={hasDocument(item, "aadhaar") ? "Open Aadhaar document" : "No secure Aadhaar file was uploaded for this application."}>View Aadhaar</button><button onClick={() => void viewDocument(item, "pan")} disabled={saving === String(item.id) || !hasDocument(item, "pan")} title={hasDocument(item, "pan") ? "Open PAN document" : "No secure PAN file was uploaded for this application."}>View PAN</button></div>{(!hasDocument(item, "aadhaar") || !hasDocument(item, "pan")) && <small className="document-unavailable">No secure document uploaded</small>}</div>}</div></article>)}{!rows.length && <p className="admin-empty">No records found.</p>}</div>}{!loading&&pages>1&&<div className="list-pagination"><button className="outline-button" disabled={page===1} onClick={()=>setPage(page-1)}>Previous</button><span>Page {page} of {pages}</span><button className="outline-button" disabled={page===pages} onClick={()=>setPage(page+1)}>Next</button></div>}{error && <p className="login-message">{error}</p>}{notice&&<p className="workspace-notice" role="status">✓ {notice}</p>}</div>{selected&&<div className="drawer-backdrop" onMouseDown={()=>setSelected(null)}><aside className="record-drawer" onMouseDown={(event)=>event.stopPropagation()}><header><div><p className="eyebrow">RECORD DETAILS</p><h2>{title(selected)}</h2></div><button className="drawer-close" onClick={()=>setSelected(null)} aria-label="Close details">×</button></header><RecordDetails section={section} item={selected} open /></aside></div>}</>;
+  const hasDocument = (
+    item: Record<string, unknown>,
+    kind: "aadhaar" | "pan",
+  ) => {
+    const application = item.application_profile;
+    const newerPath =
+      application && typeof application === "object"
+        ? (application as Record<string, unknown>)[`${kind}Path`]
+        : undefined;
+    const legacyPath = item[`${kind}_path`];
+    return (
+      (typeof newerPath === "string" && newerPath.length > 0) ||
+      (typeof legacyPath === "string" && legacyPath.length > 0)
+    );
+  };
+  const extraControls = (item: Record<string, unknown>) => {
+    const id = String(item.id || item.phone || "");
+    const disabled = saving === id;
+    const account =
+      item.bank_account && typeof item.bank_account === "object"
+        ? (item.bank_account as Record<string, unknown>)
+        : null;
+    const method = account?.payout_method === "upi" ? "UPI ID" : "bank account";
+    if (section === "Hosts" && account?.status === "pending_verification")
+      return (
+        <div className="record-actions">
+          <button
+            disabled={disabled}
+            onClick={() =>
+              void act(
+                "review_bank_account",
+                item,
+                { phone: item.phone, status: "verified" },
+                `${method} verified.`,
+              )
+            }
+          >
+            Verify {method}
+          </button>
+          <button
+            disabled={disabled}
+            onClick={() => {
+              const note = window
+                .prompt(`Reason for rejecting this ${method}?`)
+                ?.trim();
+              if (note)
+                void act(
+                  "review_bank_account",
+                  item,
+                  { phone: item.phone, status: "rejected", note },
+                  `${method} rejected.`,
+                );
+            }}
+          >
+            Reject {method}
+          </button>
+        </div>
+      );
+    if (
+      section === "Payments" &&
+      item.status === "captured" &&
+      !item.credited_at
+    )
+      return (
+        <div className="record-actions">
+          <button
+            disabled={disabled}
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Credit these captured coins to this user wallet? This is audit logged and cannot be reversed here.",
+                )
+              )
+                void act(
+                  "reconcile_payment",
+                  item,
+                  { id: item.id },
+                  "Wallet credited successfully.",
+                );
+            }}
+          >
+            Credit wallet
+          </button>
+        </div>
+      );
+    if (
+      section === "Payouts" &&
+      ["in_review", "processing"].includes(String(item.status || ""))
+    )
+      return (
+        <div className="record-actions">
+          <button
+            disabled={disabled}
+            onClick={() => setPayoutAction({ item, mode: "complete" })}
+          >
+            Confirm payment sent
+          </button>
+          <button
+            disabled={disabled}
+            onClick={() => setPayoutAction({ item, mode: "failed" })}
+          >
+            Mark failed
+          </button>
+        </div>
+      );
+    if (section === "Reports")
+      return (
+        <div className="record-actions">
+          <button
+            disabled={disabled}
+            onClick={() => {
+              setNoteTarget(item);
+              setNoteDraft("");
+            }}
+          >
+            Add note
+          </button>
+        </div>
+      );
+    return null;
+  };
+  const exportRows = () => {
+    const values = filteredRows.map((item) => ({
+      name: title(item),
+      status: detail(item),
+      date: date(item),
+      phone: String(profile(item).phone || item.phone || item.host_phone || ""),
+      amount: item.amount_paise ? Number(item.amount_paise) / 100 : "",
+    }));
+    const headers = Object.keys(
+      values[0] || { name: "", status: "", date: "", phone: "", amount: "" },
+    );
+    const csv = [
+      headers.join(","),
+      ...values.map((row) =>
+        headers
+          .map((header) =>
+            JSON.stringify(row[header as keyof typeof row] ?? ""),
+          )
+          .join(","),
+      ),
+    ].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `aasai-talk-${section.toLowerCase().replaceAll(" ", "-")}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  const saveNote = () => {
+    if (noteTarget && noteDraft.trim()) {
+      if (section === "Support")
+        void act(
+          "reply_support_ticket",
+          noteTarget,
+          {
+            id: noteTarget.id,
+            message: noteDraft.trim(),
+            resolve: supportResolve,
+          },
+          supportResolve
+            ? "Ticket resolved and member notified."
+            : "Reply sent to the member.",
+        ).then(() => {
+          setNoteDraft("");
+          setNoteTarget(null);
+          setSupportResolve(false);
+        });
+      else
+        void act(
+          "add_moderation_note",
+          noteTarget,
+          {
+            entity_type: "safety_report",
+            entity_id: noteTarget.id,
+            note: noteDraft.trim(),
+          },
+          "Internal note saved.",
+        ).then(() => {
+          setNoteDraft("");
+          setNoteTarget(null);
+        });
+    }
+  };
+  const savePayoutAction = (reference: string, note: string) => {
+    if (!payoutAction) return;
+    const status =
+      payoutAction.mode === "review"
+        ? "in_review"
+        : payoutAction.mode === "complete"
+          ? "completed"
+          : payoutAction.mode === "reject"
+            ? "rejected"
+            : "failed";
+    const success =
+      status === "completed"
+        ? "Payment confirmed and recorded."
+        : status === "in_review"
+          ? "Payout moved to In review."
+          : status === "rejected"
+            ? "Payout rejected and earnings restored."
+            : "Payment failed and earnings restored.";
+    void act(
+      "review_payout",
+      payoutAction.item,
+      {
+        id: payoutAction.item.id,
+        status,
+        reference: reference || undefined,
+        note,
+      },
+      success,
+    ).then(() => setPayoutAction(null));
+  };
+  return (
+    <>
+      {payoutAction && (
+        <PayoutReviewModal
+          action={payoutAction}
+          saving={saving !== null}
+          onClose={() => setPayoutAction(null)}
+          onSave={savePayoutAction}
+        />
+      )}
+      {hostAssistTarget && (
+        <HostOnboardingModal
+          item={hostAssistTarget}
+          saving={saving !== null}
+          onClose={() => setHostAssistTarget(null)}
+          onSave={(payload) => {
+            void act(
+              "assist_host_onboarding",
+              hostAssistTarget,
+              payload,
+              payload.approve
+                ? "Host approved after assisted setup."
+                : "Host details saved for review.",
+            ).then(() => setHostAssistTarget(null));
+          }}
+        />
+      )}
+      <div className="panel live-workspace">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">LIVE DATA</p>
+            <h2>
+              {section}
+              {section === "Audit log" ? "" : " operations"}
+            </h2>
+            <p>
+              {section === "Payouts"
+                ? overdueCount
+                  ? `${overdueCount} overdue request${overdueCount === 1 ? "" : "s"} needs attention. Open requests are prioritised oldest first.`
+                  : "Open requests are prioritised oldest first so you can meet the review target."
+                : "Protected records from Supabase."}
+            </p>
+          </div>
+          <div className="workspace-heading-actions">
+            <small aria-live="polite">
+              {refreshing
+                ? "Refreshing…"
+                : lastUpdated
+                  ? `Updated ${lastUpdated.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`
+                  : ""}
+            </small>
+            <button
+              className="outline-button"
+              onClick={exportRows}
+              disabled={loading || !filteredRows.length}
+            >
+              Export CSV
+            </button>
+            <button
+              className="outline-button"
+              onClick={() => void load()}
+              disabled={loading || refreshing}
+            >
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
+        </div>
+        <div className="workspace-tools">
+          <label>
+            <span>⌕</span>
+            <input
+              value={localSearch}
+              onChange={(event) => {
+                setLocalSearch(event.target.value);
+                setPage(1);
+              }}
+              placeholder={`Search ${section.toLowerCase()}`}
+            />
+          </label>
+          {section === "Payouts" && (
+            <>
+              <label className="date-filter">
+                <span>From</span>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(event) => {
+                    setDateFrom(event.target.value);
+                    setPage(1);
+                  }}
+                />
+              </label>
+              <label className="date-filter">
+                <span>To</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  min={dateFrom || undefined}
+                  onChange={(event) => {
+                    setDateTo(event.target.value);
+                    setPage(1);
+                  }}
+                />
+              </label>
+            </>
+          )}
+          <select
+            value={statusFilter}
+            onChange={(event) => {
+              setStatusFilter(event.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="all">All statuses</option>
+            {statuses.map((status) => (
+              <option key={status} value={status}>
+                {statusLabel(status)}
+              </option>
+            ))}
+          </select>
+          <select
+            value={sort}
+            onChange={(event) =>
+              setSort(event.target.value as "newest" | "oldest")
+            }
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
+          <small>{filteredRows.length} records</small>
+        </div>
+        {noteTarget && (
+          <section className="case-composer">
+            <div>
+              <strong>Add internal note</strong>
+              <span>{title(noteTarget)}</span>
+            </div>
+            <textarea
+              value={noteDraft}
+              onChange={(event) => setNoteDraft(event.target.value)}
+              placeholder="Write a clear internal note for the moderation timeline…"
+              maxLength={2000}
+            />
+            <div>
+              <button
+                className="outline-button"
+                onClick={() => {
+                  setNoteTarget(null);
+                  setNoteDraft("");
+                }}
+                disabled={saving !== null}
+              >
+                Cancel
+              </button>
+              <button
+                className="primary-button"
+                onClick={saveNote}
+                disabled={!noteDraft.trim() || saving !== null}
+              >
+                {saving ? "Saving…" : "Save note"}
+              </button>
+            </div>
+          </section>
+        )}
+        {loading ? (
+          <PortalLoader label={`Loading ${section.toLowerCase()}`} />
+        ) : (
+          <div className="live-list">
+            {rows.map((item) => (
+              <article key={String(item.id || item.phone)}>
+                <div>
+                  <strong>{title(item)}</strong>
+                  <span>{detail(item)}</span>
+                  <small>{date(item)}</small>
+                  <button
+                    className="detail-trigger"
+                    onClick={() => setSelected(item)}
+                  >
+                    Open details
+                  </button>
+                </div>
+                <div className="record-control-stack">
+                  {controls(item)}
+                  {extraControls(item)}
+                  {section === "Hosts" && (
+                    <div className="host-document-actions">
+                      <div className="record-actions">
+                        <button
+                          onClick={() => void viewDocument(item, "aadhaar")}
+                          disabled={
+                            saving === String(item.id) ||
+                            !hasDocument(item, "aadhaar")
+                          }
+                          title={
+                            hasDocument(item, "aadhaar")
+                              ? "Open Aadhaar document"
+                              : "No secure Aadhaar file was uploaded for this application."
+                          }
+                        >
+                          View Aadhaar
+                        </button>
+                        <button
+                          onClick={() => void viewDocument(item, "pan")}
+                          disabled={
+                            saving === String(item.id) ||
+                            !hasDocument(item, "pan")
+                          }
+                          title={
+                            hasDocument(item, "pan")
+                              ? "Open PAN document"
+                              : "No secure PAN file was uploaded for this application."
+                          }
+                        >
+                          View PAN
+                        </button>
+                      </div>
+                      {(!hasDocument(item, "aadhaar") ||
+                        !hasDocument(item, "pan")) && (
+                        <small className="document-unavailable">
+                          No secure document uploaded
+                        </small>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </article>
+            ))}
+            {!rows.length && <p className="admin-empty">No records found.</p>}
+          </div>
+        )}
+        {!loading && pages > 1 && (
+          <div className="list-pagination">
+            <button
+              className="outline-button"
+              disabled={page === 1}
+              onClick={() => setPage(page - 1)}
+            >
+              Previous
+            </button>
+            <span>
+              Page {page} of {pages}
+            </span>
+            <button
+              className="outline-button"
+              disabled={page === pages}
+              onClick={() => setPage(page + 1)}
+            >
+              Next
+            </button>
+          </div>
+        )}
+        {error && <p className="login-message">{error}</p>}
+        {notice && (
+          <p className="workspace-notice" role="status">
+            ✓ {notice}
+          </p>
+        )}
+      </div>
+      {selected && (
+        <div className="drawer-backdrop" onMouseDown={() => setSelected(null)}>
+          <aside
+            className="record-drawer"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header>
+              <div>
+                <p className="eyebrow">RECORD DETAILS</p>
+                <h2>{title(selected)}</h2>
+              </div>
+              <button
+                className="drawer-close"
+                onClick={() => setSelected(null)}
+                aria-label="Close details"
+              >
+                ×
+              </button>
+            </header>
+            <RecordDetails section={section} item={selected} open />
+          </aside>
+        </div>
+      )}
+    </>
+  );
 }
-function QueuePage({ section, query }: { section: Section; query: string }) { return <div className="panel empty-page"><div className="empty-symbol">▦</div><p className="eyebrow">{section.toUpperCase()}</p><h2>{section}</h2><p>{query ? `Searching for “${query}”` : "This workspace is being connected."}</p></div>; }
+function PayoutReviewModal({
+  action,
+  saving,
+  onClose,
+  onSave,
+}: {
+  action: PayoutAction;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (reference: string, note: string) => void;
+}) {
+  const [reference, setReference] = useState("");
+  const [note, setNote] = useState("");
+  const item = action.item;
+  const account =
+    item.bank_account && typeof item.bank_account === "object"
+      ? (item.bank_account as Record<string, unknown>)
+      : {};
+  const isUpi = account.payout_method === "upi";
+  const title =
+    action.mode === "review"
+      ? "Start payout review"
+      : action.mode === "complete"
+        ? "Confirm payment sent"
+        : action.mode === "reject"
+          ? "Reject withdrawal"
+          : "Mark payment failed";
+  const needsReference = action.mode === "complete";
+  const needsDestination = action.mode === "complete";
+  const needsNote = true;
+  const valid =
+    (!needsReference || reference.trim().length > 0) &&
+    (!needsNote || note.trim().length > 0);
+  return (
+    <div className="drawer-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="record-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onMouseDown={(event) => event.stopPropagation()}
+        style={{ maxWidth: 620 }}
+      >
+        <header>
+          <div>
+            <p className="eyebrow">MANUAL PAYOUT</p>
+            <h2>{title}</h2>
+          </div>
+          <button className="drawer-close" onClick={onClose} aria-label="Close">
+            ×
+          </button>
+        </header>
+        <div className="detail-card" style={{ gap: 18 }}>
+          <div className="payout-review-amount">
+            <span>Withdrawal amount</span>
+            <strong>₹{Number(item.amount_paise || 0) / 100}</strong>
+          </div>
+          {needsDestination && (
+            <section className="payout-destination-card">
+              <p className="eyebrow">SEND TO VERIFIED DESTINATION</p>
+              <strong>{String(account.account_holder_name || "Host")}</strong>
+              <span>{isUpi ? "UPI ID" : "Bank account"}</span>
+              <b>
+                {isUpi
+                  ? String(account.upi_id || "Not available")
+                  : String(account.account_number || "Not available")}
+              </b>
+              {!isUpi && (
+                <small>
+                  IFSC: {String(account.ifsc_code || "Not available")}
+                </small>
+              )}
+            </section>
+          )}
+          <label className="auth-field">
+            <span>
+              {needsReference
+                ? "UTR / transfer reference"
+                : "Internal reviewer note"}
+            </span>
+            {needsReference ? (
+              <input
+                value={reference}
+                onChange={(event) => setReference(event.target.value)}
+                placeholder="Enter the reference from your bank or GPay"
+                autoFocus
+              />
+            ) : (
+              <textarea
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder={
+                  action.mode === "review"
+                    ? "Why are you starting this review?"
+                    : "Explain this decision for the Host."
+                }
+                rows={4}
+              />
+            )}
+          </label>
+          {needsReference && (
+            <label className="auth-field">
+              <span>Internal payment note</span>
+              <textarea
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="Example: Paid to verified UPI ID after final check."
+                rows={4}
+              />
+            </label>
+          )}
+          <p className="payout-review-help">
+            {action.mode === "complete"
+              ? "Check the destination and complete the transfer first. Both the UTR and payment note are required. They are kept in the admin record only."
+              : action.mode === "review"
+                ? "The Host will see that the request is being checked."
+                : "This action is recorded and the Host will see the outcome in their withdrawal history."}
+          </p>
+          <div className="record-actions">
+            <button
+              className="outline-button"
+              onClick={onClose}
+              disabled={saving}
+            >
+              Cancel
+            </button>
+            <button
+              className="primary-button"
+              onClick={() => onSave(reference.trim(), note.trim())}
+              disabled={!valid || saving}
+            >
+              {saving
+                ? "Saving…"
+                : action.mode === "complete"
+                  ? "Confirm payment"
+                  : action.mode === "review"
+                    ? "Start review"
+                    : action.mode === "reject"
+                      ? "Reject request"
+                      : "Mark failed"}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+function HostOnboardingModal({
+  item,
+  saving,
+  onClose,
+  onSave,
+}: {
+  item: Record<string, unknown>;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (payload: Record<string, unknown>) => void;
+}) {
+  const profile =
+    item.profile && typeof item.profile === "object"
+      ? (item.profile as Record<string, unknown>)
+      : {};
+  const existing =
+    item.bank_account && typeof item.bank_account === "object"
+      ? (item.bank_account as Record<string, unknown>)
+      : {};
+  const [pan, setPan] = useState("");
+  const [aadhaar, setAadhaar] = useState("");
+  const [holder, setHolder] = useState(
+    String(existing.account_holder_name || profile.display_name || ""),
+  );
+  const [method, setMethod] = useState<"upi" | "bank">(
+    existing.payout_method === "bank" ? "bank" : "upi",
+  );
+  const [upi, setUpi] = useState(String(existing.upi_id || ""));
+  const [account, setAccount] = useState(String(existing.account_number || ""));
+  const [ifsc, setIfsc] = useState(String(existing.ifsc_code || ""));
+  const [verified, setVerified] = useState(existing.status === "verified");
+  const [approve, setApprove] = useState(true);
+  const ready =
+    pan.trim().length === 10 &&
+    aadhaar.replace(/\s/g, "").length === 12 &&
+    holder.trim().length >= 2 &&
+    (method === "upi"
+      ? upi.includes("@")
+      : account.replace(/\s/g, "").length >= 9 && ifsc.trim().length === 11);
+  return (
+    <div className="drawer-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="record-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Assisted Host setup"
+        onMouseDown={(event) => event.stopPropagation()}
+        style={{ maxWidth: 700 }}
+      >
+        <header>
+          <div>
+            <p className="eyebrow">ASSISTED HOST ONBOARDING</p>
+            <h2>{String(profile.display_name || item.phone || "New Host")}</h2>
+          </div>
+          <button className="drawer-close" onClick={onClose} aria-label="Close">
+            ×
+          </button>
+        </header>
+        <div className="detail-card" style={{ gap: 16 }}>
+          <p className="payout-review-help">
+            Record only details the member has provided and you have checked.
+            PAN and Aadhaar are stored as protected verification references;
+            only their final four characters are retained.
+          </p>
+          <div className="host-onboarding-grid">
+            <label className="auth-field">
+              <span>PAN number</span>
+              <input
+                value={pan}
+                onChange={(event) => setPan(event.target.value.toUpperCase())}
+                placeholder="ABCDE1234F"
+                maxLength={10}
+              />
+            </label>
+            <label className="auth-field">
+              <span>Aadhaar number</span>
+              <input
+                value={aadhaar}
+                onChange={(event) =>
+                  setAadhaar(event.target.value.replace(/\D/g, ""))
+                }
+                placeholder="12-digit Aadhaar"
+                inputMode="numeric"
+                maxLength={12}
+              />
+            </label>
+          </div>
+          <label className="auth-field">
+            <span>Account holder name</span>
+            <input
+              value={holder}
+              onChange={(event) => setHolder(event.target.value)}
+              placeholder="Name on bank or UPI account"
+            />
+          </label>
+          <div className="record-actions">
+            <button
+              className={method === "upi" ? "primary-button" : "outline-button"}
+              type="button"
+              onClick={() => setMethod("upi")}
+            >
+              UPI ID
+            </button>
+            <button
+              className={
+                method === "bank" ? "primary-button" : "outline-button"
+              }
+              type="button"
+              onClick={() => setMethod("bank")}
+            >
+              Bank account
+            </button>
+          </div>
+          {method === "upi" ? (
+            <label className="auth-field">
+              <span>Verified UPI ID</span>
+              <input
+                value={upi}
+                onChange={(event) => setUpi(event.target.value)}
+                placeholder="name@bank"
+              />
+            </label>
+          ) : (
+            <div className="host-onboarding-grid">
+              <label className="auth-field">
+                <span>Bank account number</span>
+                <input
+                  value={account}
+                  onChange={(event) =>
+                    setAccount(event.target.value.replace(/\s/g, ""))
+                  }
+                  inputMode="numeric"
+                />
+              </label>
+              <label className="auth-field">
+                <span>IFSC code</span>
+                <input
+                  value={ifsc}
+                  onChange={(event) =>
+                    setIfsc(event.target.value.toUpperCase())
+                  }
+                  placeholder="ABCD0123456"
+                  maxLength={11}
+                />
+              </label>
+            </div>
+          )}
+          <label className="payout-confirm-check">
+            <input
+              type="checkbox"
+              checked={verified}
+              onChange={(event) => setVerified(event.target.checked)}
+            />{" "}
+            I have verified this payout destination with the Host.
+          </label>
+          <label className="payout-confirm-check">
+            <input
+              type="checkbox"
+              checked={approve}
+              onChange={(event) => setApprove(event.target.checked)}
+            />{" "}
+            Approve this member as a Host now.
+          </label>
+          <div className="record-actions">
+            <button
+              className="outline-button"
+              onClick={onClose}
+              disabled={saving}
+            >
+              Cancel
+            </button>
+            <button
+              className="primary-button"
+              disabled={!ready || saving}
+              onClick={() =>
+                onSave({
+                  phone: item.phone,
+                  pan_number: pan,
+                  aadhaar_number: aadhaar,
+                  account_holder_name: holder,
+                  payout_method: method,
+                  upi_id: upi,
+                  account_number: account,
+                  ifsc_code: ifsc,
+                  payout_verified: verified,
+                  approve,
+                })
+              }
+            >
+              {saving
+                ? "Saving…"
+                : approve
+                  ? "Save & approve Host"
+                  : "Save for review"}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+function QueuePage({ section, query }: { section: Section; query: string }) {
+  return (
+    <div className="panel empty-page">
+      <div className="empty-symbol">▦</div>
+      <p className="eyebrow">{section.toUpperCase()}</p>
+      <h2>{section}</h2>
+      <p>
+        {query
+          ? `Searching for “${query}”`
+          : "This workspace is being connected."}
+      </p>
+    </div>
+  );
+}
 export default App;
