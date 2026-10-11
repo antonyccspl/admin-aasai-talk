@@ -114,6 +114,17 @@ function persistSection(section: Section) {
   );
 }
 
+function formatTalkDuration(seconds: unknown) {
+  const safeSeconds = Math.max(0, Number(seconds) || 0);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = (safeSeconds % 3600) / 60;
+  const minuteText = minutes.toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+  });
+  return hours ? `${hours}h ${minuteText}m` : `${minuteText} min`;
+}
+
 function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [access, setAccess] = useState<"loading" | "allowed" | "denied">(
@@ -608,6 +619,7 @@ function Overview({
         : `Last ${range} days`;
   const revenue = Number(live.revenue_paise || 0) / 100;
   const earnings = Number(live.host_earnings_paise || 0) / 100;
+  const withdrawn = Number(live.withdrawals_completed_paise || 0) / 100;
   const paid = Math.max(revenue, earnings, 1);
   return (
     <div className="page-grid">
@@ -671,9 +683,9 @@ function Overview({
           tone="gold"
         />
         <Metric
-          label="Call minutes"
-          value={String(live.call_minutes ?? 0)}
-          note="Billed call minutes"
+          label="Talk time"
+          value={formatTalkDuration(live.call_seconds)}
+          note="Connected call duration"
           tone="violet"
         />
         <Metric
@@ -681,6 +693,12 @@ function Overview({
           value={`₹${earnings}`}
           note="Recorded earnings"
           tone="mint"
+        />
+        <Metric
+          label="Paid to Hosts"
+          value={`₹${withdrawn}`}
+          note={`${live.withdrawals_completed ?? 0} completed withdrawal${Number(live.withdrawals_completed || 0) === 1 ? "" : "s"}`}
+          tone="violet"
         />
         <Metric
           label="New users"
@@ -1612,7 +1630,7 @@ function PerformanceReports({ session }: { session: Session }) {
             `₹${Number(summary.host_earnings_paise || 0) / 100}`,
             "Earnings from call ledger",
           ],
-          ["Talk minutes", summary.call_minutes, "Actual call duration"],
+          ["Talk time", formatTalkDuration(summary.call_seconds), "Actual call duration"],
         ]
       : view === "Users"
         ? [
@@ -1664,11 +1682,11 @@ function PerformanceReports({ session }: { session: Session }) {
                 [
                   "Completed calls",
                   summary.calls_completed,
-                  `${summary.call_minutes || 0} actual minutes`,
+                  `${formatTalkDuration(summary.call_seconds)} actual talk time`,
                 ],
                 [
                   "Average connected call",
-                  `${summary.average_call_minutes || 0} min`,
+                  formatTalkDuration(summary.average_call_seconds),
                   `${summary.calls_total || 0} total call attempts`,
                 ],
                 [
@@ -1743,7 +1761,7 @@ function PerformanceReports({ session }: { session: Session }) {
               <strong>{name(item)}</strong>
               <small>{String(item.phone)}</small>
             </div>
-            <b>{Number(item.talk_minutes || 0)} min</b>
+            <b>{formatTalkDuration(item.talk_seconds)}</b>
             <b>₹{Number(item.earned_paise || 0) / 100}</b>
             <span>
               {Number(item.calls || 0)} calls · {Number(item.audio_calls || 0)}{" "}
@@ -1766,7 +1784,7 @@ function PerformanceReports({ session }: { session: Session }) {
               <strong>{name(item)}</strong>
               <small>{String(item.phone)}</small>
             </div>
-            <b>{Number(item.talk_minutes || 0)} min</b>
+            <b>{formatTalkDuration(item.talk_seconds)}</b>
             <b>{Number(item.spent_coins || 0)} coins</b>
             <span>
               {Number(item.calls || 0)} calls · {Number(item.audio_calls || 0)}{" "}
@@ -1849,7 +1867,7 @@ function PerformanceReports({ session }: { session: Session }) {
           <p className="eyebrow">CALL DELIVERY</p>
           <h2>{Number(summary.calls_completed || 0)} completed calls</h2>
           <p>
-            {Number(summary.call_minutes || 0)} actual minutes ·{" "}
+            {formatTalkDuration(summary.call_seconds)} actual talk time ·{" "}
             {Number(summary.audio_calls || 0)} audio ·{" "}
             {Number(summary.video_calls || 0)} video
           </p>
@@ -2504,7 +2522,7 @@ function LiveWorkspace({
       : status;
   const date = (item: Record<string, unknown>) =>
     section === "Payouts"
-      ? `₹${Number(item.amount_paise || 0) / 100} · Requested ${formatDateTime(String(item.created_at || ""))}${item.review_due_at ? ` · Review by ${formatDateTime(String(item.review_due_at))}` : ""}`
+      ? `₹${Number(item.amount_paise || 0) / 100} · Requested ${formatDateTime(String(item.created_at || ""))}${item.review_due_at ? ` · Review by ${formatDateTime(String(item.review_due_at))}` : ""} · Host total paid ₹${Number(item.total_withdrawn_paise || 0) / 100} · Available ₹${Number(item.available_earnings_paise || 0) / 100}`
       : section === "Coin packs"
         ? `₹${Number(item.price_paise || 0) / 100} · ${item.active ? "Active" : "Inactive"}`
         : section === "Hosts"
