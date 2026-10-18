@@ -30,3 +30,21 @@ If you are developing a production application, we recommend enabling type-aware
 ```
 
 See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+
+## Instagram Host enrollment
+
+Super Admins can create a Host record from **Hosts → New Instagram Host** for a
+woman who contacts the team directly. The form collects the same profile,
+preferences, photo, and private KYC documents as the in-app Host application,
+plus payout details and required admin attestations. PAN/Aadhaar numbers are
+sent only for verification; the backend stores their final four characters.
+The profile is prepared for app use, but the Host must still verify the phone
+number with the app's OTP flow before signing in.
+
+Before using this flow in production, apply
+`../aasai-talk/supabase/migrations/20261013000100_admin_instagram_host_enrollment.sql`
+and deploy the updated `admin-portal` Edge Function from the app repository.
+Deploy both `admin-portal` and `content-moderation` so they use the shared
+photo-safety scanner. Rejected photos cannot be overridden; photos needing
+manual review can be published only after the Super Admin confirms that the
+photo meets the Host photo-safety rules.

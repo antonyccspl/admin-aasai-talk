@@ -380,6 +380,7 @@ function App() {
             section={section as LiveSection}
             session={session}
             query={search}
+            canCreateHost={adminInfo?.role === "super_admin"}
           />
         ) : (
           <QueuePage section={section} query={search} />
@@ -2046,6 +2047,38 @@ async function adminRequest(
     throw new Error(data.error || "The request could not be completed.");
   return data;
 }
+type InstagramHostSubmission = {
+  payload: Record<string, unknown>;
+  photo: File;
+  aadhaarFile: File;
+  panFile: File;
+};
+async function adminMultipartRequest(
+  session: Session,
+  action: string,
+  submission: InstagramHostSubmission,
+) {
+  const form = new FormData();
+  form.set("payload", JSON.stringify({ action, ...submission.payload }));
+  form.set("photo", submission.photo);
+  form.set("aadhaar_file", submission.aadhaarFile);
+  form.set("pan_file", submission.panFile);
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-portal`,
+    {
+      method: "POST",
+      headers: {
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: form,
+    },
+  );
+  const data = await response.json();
+  if (!response.ok)
+    throw new Error(data.error || "The Host could not be created.");
+  return data;
+}
 function formatDateTime(value: string) {
   const date = new Date(value);
   if (!value || Number.isNaN(date.getTime())) return "—";
@@ -2292,10 +2325,12 @@ function LiveWorkspace({
   section,
   session,
   query,
+  canCreateHost,
 }: {
   section: LiveSection;
   session: Session;
   query: string;
+  canCreateHost: boolean;
 }) {
   const [items, setItems] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2324,6 +2359,7 @@ function LiveWorkspace({
     string,
     unknown
   > | null>(null);
+  const [creatingInstagramHost, setCreatingInstagramHost] = useState(false);
   const load = async (initial = false) => {
     if (initial || !hasLoaded) setLoading(true);
     else setRefreshing(true);
@@ -3038,6 +3074,29 @@ function LiveWorkspace({
           }}
         />
       )}
+      {creatingInstagramHost && (
+        <InstagramHostModal
+          saving={saving !== null}
+          onClose={() => setCreatingInstagramHost(false)}
+          onSave={async (submission) => {
+            setSaving("instagram-host");
+            setError("");
+            setNotice("");
+            try {
+              await adminMultipartRequest(session, "create_instagram_host", submission);
+              await load();
+              setNotice(
+                submission.payload.approve === true
+                  ? "Instagram Host profile created and approved."
+                  : "Instagram Host profile created for review.",
+              );
+              setCreatingInstagramHost(false);
+            } finally {
+              setSaving(null);
+            }
+          }}
+        />
+      )}
       <div className="panel live-workspace">
         <div className="panel-heading">
           <div>
@@ -3055,6 +3114,15 @@ function LiveWorkspace({
             </p>
           </div>
           <div className="workspace-heading-actions">
+            {section === "Hosts" && canCreateHost && (
+              <button
+                className="primary-button"
+                onClick={() => setCreatingInstagramHost(true)}
+                disabled={saving !== null}
+              >
+                + New Instagram Host
+              </button>
+            )}
             <small aria-live="polite">
               {refreshing
                 ? "Refreshing…"
@@ -3660,6 +3728,374 @@ function HostOnboardingModal({
             </button>
           </div>
         </div>
+      </section>
+    </div>
+  );
+}
+const instagramHostLanguages = [
+  "Hindi",
+  "English",
+  "Tamil",
+  "Telugu",
+  "Kannada",
+  "Malayalam",
+  "Bengali",
+  "Marathi",
+  "Gujarati",
+  "Punjabi",
+  "Urdu",
+  "Odia",
+  "Assamese",
+  "Konkani",
+  "Other",
+];
+const instagramHostInterests = [
+  "Music",
+  "Movies",
+  "Travel",
+  "Food",
+  "Books",
+  "Poetry",
+  "Coffee",
+  "Comedy",
+  "Fitness",
+  "Fashion",
+  "Gaming",
+  "Sports",
+  "Technology",
+  "Photography",
+  "Art & culture",
+  "Business",
+  "Spirituality",
+  "Late night talks",
+];
+function InstagramHostModal({
+  saving,
+  onClose,
+  onSave,
+}: {
+  saving: boolean;
+  onClose: () => void;
+  onSave: (submission: InstagramHostSubmission) => Promise<void>;
+}) {
+  const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [city, setCity] = useState("");
+  const [bio, setBio] = useState("");
+  const [languages, setLanguages] = useState<string[]>([]);
+  const [interests, setInterests] = useState<string[]>([]);
+  const [audio, setAudio] = useState(true);
+  const [video, setVideo] = useState(false);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [aadhaarFile, setAadhaarFile] = useState<File | null>(null);
+  const [panFile, setPanFile] = useState<File | null>(null);
+  const [pan, setPan] = useState("");
+  const [aadhaar, setAadhaar] = useState("");
+  const [holder, setHolder] = useState("");
+  const [method, setMethod] = useState<"upi" | "bank">("upi");
+  const [upi, setUpi] = useState("");
+  const [account, setAccount] = useState("");
+  const [ifsc, setIfsc] = useState("");
+  const [payoutVerified, setPayoutVerified] = useState(false);
+  const [approve, setApprove] = useState(true);
+  const [attested, setAttested] = useState(false);
+  const [photoSafetyAttested, setPhotoSafetyAttested] = useState(false);
+  const [error, setError] = useState("");
+  const ready =
+    /^\+91\d{10}$/.test(phone.trim()) &&
+    name.trim().length >= 2 &&
+    username.trim().length >= 3 &&
+    !!dateOfBirth &&
+    city.trim().length >= 2 &&
+    bio.trim().length >= 12 &&
+    languages.length > 0 &&
+    interests.length > 0 &&
+    (audio || video) &&
+    !!photo &&
+    !!aadhaarFile &&
+    !!panFile &&
+    /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan.trim().toUpperCase()) &&
+    /^\d{12}$/.test(aadhaar.replace(/\s/g, "")) &&
+    holder.trim().length >= 2 &&
+    (method === "upi"
+      ? /^[A-Za-z0-9._-]{2,256}@[A-Za-z][A-Za-z0-9._-]{1,64}$/.test(upi.trim())
+      : /^\d{9,18}$/.test(account.replace(/\s/g, "")) &&
+        /^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc.trim().toUpperCase())) &&
+    attested &&
+    photoSafetyAttested;
+  const toggle = (
+    values: string[],
+    setValues: (values: string[]) => void,
+    value: string,
+    maximum: number,
+  ) => {
+    setValues(
+      values.includes(value)
+        ? values.filter((selected) => selected !== value)
+        : values.length < maximum
+          ? [...values, value]
+          : values,
+    );
+  };
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError("");
+    if (!ready || !photo || !aadhaarFile || !panFile) {
+      setError("Complete the required Host details and verification checks.");
+      return;
+    }
+    try {
+      await onSave({
+        payload: {
+          phone: phone.trim(),
+          name: name.trim(),
+          username: username.trim(),
+          date_of_birth: dateOfBirth,
+          city: city.trim(),
+          bio: bio.trim(),
+          languages,
+          interests,
+          audio,
+          video,
+          pan_number: pan.trim().toUpperCase(),
+          aadhaar_number: aadhaar.replace(/\s/g, ""),
+          account_holder_name: holder.trim(),
+          payout_method: method,
+          upi_id: upi.trim(),
+          account_number: account.replace(/\s/g, ""),
+          ifsc_code: ifsc.trim().toUpperCase(),
+          payout_verified: payoutVerified,
+          approve,
+          admin_identity_consent_attested: attested,
+          admin_photo_safety_attested: photoSafetyAttested,
+        },
+        photo,
+        aadhaarFile,
+        panFile,
+      });
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "The Host could not be created. Please try again.",
+      );
+    }
+  };
+  const selectFile = (
+    event: React.ChangeEvent<HTMLInputElement>,
+    setFile: (file: File | null) => void,
+  ) => {
+    setFile(event.target.files?.[0] || null);
+  };
+  return (
+    <div
+      className="drawer-backdrop"
+      role="presentation"
+      onMouseDown={() => {
+        if (!saving) onClose();
+      }}
+    >
+      <section
+        className="record-drawer instagram-host-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Create Instagram Host profile"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <p className="eyebrow">INSTAGRAM LEAD · NEW HOST</p>
+            <h2>Create a Host profile</h2>
+          </div>
+          <button
+            className="drawer-close"
+            onClick={onClose}
+            aria-label="Close"
+            disabled={saving}
+          >
+            ×
+          </button>
+        </header>
+        <form className="detail-card assisted-host-onboarding" onSubmit={submit}>
+          <div className="host-onboarding-notice">
+            <span aria-hidden="true">◈</span>
+            <p>
+              This sets up the Host record only. She must still verify this
+              phone number with the app&apos;s OTP flow before she can sign in.
+              Full PAN/Aadhaar numbers are never saved; only the final four
+              characters are retained for compliance.
+            </p>
+          </div>
+          <section className="host-onboarding-section" aria-labelledby="lead-profile-heading">
+            <div className="host-onboarding-section-heading">
+              <p className="eyebrow">01 · PROFILE</p>
+              <h3 id="lead-profile-heading">Details for her app profile</h3>
+            </div>
+            <div className="host-onboarding-grid">
+              <label className="auth-field">
+                <span>Phone number</span>
+                <input value={phone} onChange={(event) => setPhone(event.target.value.replace(/[^\d+]/g, ""))} placeholder="+919876543210" autoComplete="tel" />
+              </label>
+              <label className="auth-field">
+                <span>Display name</span>
+                <input value={name} onChange={(event) => setName(event.target.value)} maxLength={50} />
+              </label>
+              <label className="auth-field">
+                <span>Username</span>
+                <input value={username} onChange={(event) => setUsername(event.target.value.replace(/[^A-Za-z0-9_]/g, ""))} maxLength={20} placeholder="3–20 letters, numbers, or _" />
+              </label>
+              <label className="auth-field">
+                <span>Date of birth</span>
+                <input type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} />
+              </label>
+              <label className="auth-field">
+                <span>City</span>
+                <input value={city} onChange={(event) => setCity(event.target.value)} maxLength={80} />
+              </label>
+              <label className="auth-field">
+                <span>Profile photo · JPG, PNG, or WEBP (max 5 MB)</span>
+                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => selectFile(event, setPhoto)} />
+                {photo && <small>{photo.name}</small>}
+              </label>
+            </div>
+            <label className="auth-field">
+              <span>Short bio</span>
+              <textarea value={bio} onChange={(event) => setBio(event.target.value)} maxLength={500} rows={3} />
+              <small>{bio.trim().length}/500 characters · at least 12 required</small>
+            </label>
+            <div>
+              <p className="host-choice-label">Languages · select up to 4</p>
+              <div className="host-choice-grid">
+                {instagramHostLanguages.map((language) => (
+                  <label key={language} className="host-choice">
+                    <input type="checkbox" checked={languages.includes(language)} onChange={() => toggle(languages, setLanguages, language, 4)} />
+                    {language}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="host-choice-label">Interests · select up to 6</p>
+              <div className="host-choice-grid">
+                {instagramHostInterests.map((interest) => (
+                  <label key={interest} className="host-choice">
+                    <input type="checkbox" checked={interests.includes(interest)} onChange={() => toggle(interests, setInterests, interest, 6)} />
+                    {interest}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="host-choice-label">Call preferences</p>
+              <div className="host-choice-grid">
+                <label className="host-choice">
+                  <input type="checkbox" checked={audio} onChange={(event) => setAudio(event.target.checked)} />
+                  Audio calls
+                </label>
+                <label className="host-choice">
+                  <input type="checkbox" checked={video} onChange={(event) => setVideo(event.target.checked)} />
+                  Video calls
+                </label>
+              </div>
+            </div>
+          </section>
+          <section className="host-onboarding-section" aria-labelledby="host-documents-heading">
+            <div className="host-onboarding-section-heading">
+              <p className="eyebrow">02 · HOST VERIFICATION</p>
+              <h3 id="host-documents-heading">Verify identity documents</h3>
+            </div>
+            <p className="host-onboarding-help">
+              Upload the document images/PDFs required by the in-app Host application.
+              Files are stored privately for authorized review.
+            </p>
+            <div className="host-onboarding-grid">
+              <label className="auth-field">
+                <span>PAN document · image or PDF (max 10 MB)</span>
+                <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => selectFile(event, setPanFile)} />
+                {panFile && <small>{panFile.name}</small>}
+              </label>
+              <label className="auth-field">
+                <span>Aadhaar document · image or PDF (max 10 MB)</span>
+                <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => selectFile(event, setAadhaarFile)} />
+                {aadhaarFile && <small>{aadhaarFile.name}</small>}
+              </label>
+              <label className="auth-field">
+                <span>PAN number · retained as last four only</span>
+                <input value={pan} onChange={(event) => setPan(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="ABCDE1234F" maxLength={10} autoCapitalize="characters" />
+              </label>
+              <label className="auth-field">
+                <span>Aadhaar number · retained as last four only</span>
+                <input value={aadhaar} onChange={(event) => setAadhaar(event.target.value.replace(/\D/g, ""))} placeholder="12-digit Aadhaar" inputMode="numeric" maxLength={12} />
+              </label>
+            </div>
+          </section>
+          <section className="host-onboarding-section" aria-labelledby="instagram-payout-heading">
+            <div className="host-onboarding-section-heading">
+              <p className="eyebrow">03 · PAYOUT DESTINATION</p>
+              <h3 id="instagram-payout-heading">Where should earnings be sent?</h3>
+            </div>
+            <label className="auth-field">
+              <span>Account holder name</span>
+              <input value={holder} onChange={(event) => setHolder(event.target.value)} maxLength={120} />
+            </label>
+            <div className="payout-method-picker" role="group" aria-label="Payout method">
+              <button type="button" className={method === "upi" ? "selected" : ""} onClick={() => setMethod("upi")}>
+                <strong>UPI ID</strong><span>Instantly payable</span>
+              </button>
+              <button type="button" className={method === "bank" ? "selected" : ""} onClick={() => setMethod("bank")}>
+                <strong>Bank account</strong><span>Account + IFSC</span>
+              </button>
+            </div>
+            {method === "upi" ? (
+              <label className="auth-field">
+                <span>UPI ID</span>
+                <input value={upi} onChange={(event) => setUpi(event.target.value)} placeholder="name@bank" />
+              </label>
+            ) : (
+              <div className="host-onboarding-grid">
+                <label className="auth-field">
+                  <span>Bank account number</span>
+                  <input value={account} onChange={(event) => setAccount(event.target.value.replace(/\D/g, ""))} inputMode="numeric" />
+                </label>
+                <label className="auth-field">
+                  <span>IFSC code</span>
+                  <input value={ifsc} onChange={(event) => setIfsc(event.target.value.toUpperCase())} maxLength={11} />
+                </label>
+              </div>
+            )}
+          </section>
+          <section className="host-onboarding-section host-onboarding-confirm" aria-labelledby="instagram-attestation-heading">
+            <div className="host-onboarding-section-heading">
+              <p className="eyebrow">04 · ADMIN ATTESTATION</p>
+              <h3 id="instagram-attestation-heading">Review before saving</h3>
+            </div>
+            <label className="payout-confirm-check">
+              <input type="checkbox" checked={photoSafetyAttested} onChange={(event) => setPhotoSafetyAttested(event.target.checked)} />
+              I reviewed this profile photo and confirmed it follows the Host photo-safety rules. This is required if the automatic scan requests manual review.
+            </label>
+            <label className="payout-confirm-check">
+              <input type="checkbox" checked={attested} onChange={(event) => setAttested(event.target.checked)} />
+              I personally verified this phone number, checked the original identity documents and confirmed that she is at least 18 and consents to creating this account and Host profile.
+            </label>
+            <label className="payout-confirm-check">
+              <input type="checkbox" checked={payoutVerified} onChange={(event) => setPayoutVerified(event.target.checked)} />
+              I separately verified the payout destination with the Host.
+            </label>
+            <label className="payout-confirm-check">
+              <input type="checkbox" checked={approve} onChange={(event) => setApprove(event.target.checked)} />
+              Approve this Host application now. If unchecked, save it for review.
+            </label>
+          </section>
+          {error && <p className="login-message" role="alert">{error}</p>}
+          <div className="host-onboarding-footer">
+            <button type="button" className="outline-button" onClick={onClose} disabled={saving}>Cancel</button>
+            <button type="submit" className="primary-button" disabled={!ready || saving}>
+              {saving ? "Creating Host…" : approve ? "Create & approve Host" : "Create for review"}
+            </button>
+          </div>
+        </form>
       </section>
     </div>
   );
