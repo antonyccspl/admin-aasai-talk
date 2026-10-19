@@ -31,6 +31,7 @@ import "./report-center.css";
 import "./offers.css";
 import "./compact-portal.css";
 import "./host-onboarding.css";
+import "./live-presence.css";
 
 type Section =
   | "Overview"
@@ -554,6 +555,14 @@ function Overview({
   onNavigate: (section: Section) => void;
 }) {
   const [metrics, setMetrics] = useState<Record<string, number> | null>(null);
+  const [presence, setPresence] = useState<{
+    counts: { hosts: number; male_users: number };
+    hosts: Record<string, unknown>[];
+    male_users: Record<string, unknown>[];
+    checked_at: string;
+  } | null>(null);
+  const [presenceError, setPresenceError] = useState("");
+  const [presenceReload, setPresenceReload] = useState(0);
   const [range, setRange] = useState<"7" | "30" | "90" | "all" | "custom">(
     "30",
   );
@@ -584,6 +593,45 @@ function Overview({
       }
     })();
   }, [session, range, startDate, endDate]);
+  useEffect(() => {
+    let active = true;
+    let pending = false;
+    const refresh = async () => {
+      if (pending) return;
+      pending = true;
+      try {
+        const response = await adminRequest(session, "live_presence");
+        if (!active) return;
+        setPresence({
+          counts: {
+            hosts: Number(response.counts?.hosts || 0),
+            male_users: Number(response.counts?.male_users || 0),
+          },
+          hosts: Array.isArray(response.hosts) ? response.hosts : [],
+          male_users: Array.isArray(response.male_users)
+            ? response.male_users
+            : [],
+          checked_at: String(response.checked_at || ""),
+        });
+        setPresenceError("");
+      } catch (cause) {
+        if (!active) return;
+        setPresenceError(
+          cause instanceof Error
+            ? cause.message
+            : "Unable to refresh online members.",
+        );
+      } finally {
+        pending = false;
+      }
+    };
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 30000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [session, presenceReload]);
   if (!metrics && !error)
     return (
       <section className="panel page-loader-panel">
@@ -622,6 +670,64 @@ function Overview({
   const earnings = Number(live.host_earnings_paise || 0) / 100;
   const withdrawn = Number(live.withdrawals_completed_paise || 0) / 100;
   const paid = Math.max(revenue, earnings, 1);
+  const onlineList = (
+    title: string,
+    eyebrow: string,
+    members: Record<string, unknown>[],
+    total: number,
+    target: "Hosts" | "Users",
+  ) => (
+    <section className="presence-list">
+      <header>
+        <div>
+          <p className="eyebrow">{eyebrow}</p>
+          <h3>{title}</h3>
+        </div>
+        <strong>{total.toLocaleString("en-IN")}</strong>
+      </header>
+      {members.length ? (
+        <div className="presence-members">
+          {members.map((member) => {
+            const name = String(
+              member.display_name || member.username || "Member",
+            );
+            const username = String(member.username || "");
+            return (
+              <article className="presence-member" key={String(member.phone)}>
+                <span className="presence-dot" aria-label="Online" />
+                <div>
+                  <strong>{name}</strong>
+                  <span>
+                    {String(member.phone || "")}
+                    {username ? ` · @${username}` : ""}
+                  </span>
+                </div>
+                <time dateTime={String(member.last_seen_at || "")}>
+                  {member.last_seen_at
+                    ? new Date(String(member.last_seen_at)).toLocaleTimeString(
+                        "en-IN",
+                        { hour: "2-digit", minute: "2-digit" },
+                      )
+                    : ""}
+                </time>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="presence-empty">
+          {total > 0
+            ? "Individual profiles aren’t available with your admin access."
+            : "No one is online right now."}
+        </p>
+      )}
+      {members.length > 0 && (
+        <button className="text-button" onClick={() => onNavigate(target)}>
+          Open {target.toLowerCase()} →
+        </button>
+      )}
+    </section>
+  );
   return (
     <div className="page-grid">
       <section className="hero-card">
@@ -725,6 +831,61 @@ function Overview({
           note="Reports needing review"
           tone="mint"
         />
+      </section>
+      <section className="panel live-presence-panel">
+        <div className="presence-heading">
+          <div>
+            <p className="eyebrow">RIGHT NOW</p>
+            <h2>Online members</h2>
+            <p>Active app sessions with a heartbeat in the last minute.</p>
+          </div>
+          <div className="presence-refresh">
+            {presence?.checked_at && (
+              <span>
+                Updated{" "}
+                {new Date(presence.checked_at).toLocaleTimeString("en-IN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            )}
+            <button
+              className="outline-button"
+              onClick={() => setPresenceReload((value) => value + 1)}
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+        {presenceError && (
+          <p className="presence-error" role="alert">
+            {presence
+              ? `Could not refresh live presence. Showing the last successful update. ${presenceError}`
+              : presenceError}
+          </p>
+        )}
+        {presence ? (
+          <div className="presence-grid">
+            {onlineList(
+              "Hosts online",
+              "HOSTS",
+              presence.hosts,
+              presence.counts.hosts,
+              "Hosts",
+            )}
+            {onlineList(
+              "Male users online",
+              "MALE USERS",
+              presence.male_users,
+              presence.counts.male_users,
+              "Users",
+            )}
+          </div>
+        ) : (
+          !presenceError && (
+            <p className="presence-loading">Loading current online members…</p>
+          )
+        )}
       </section>
       <section className="panel queue-panel">
         <div className="panel-heading">

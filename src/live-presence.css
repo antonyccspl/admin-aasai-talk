@@ -1,0 +1,27 @@
+.live-presence-panel { grid-column: 1 / -1; padding: 24px; }
+.presence-heading { align-items: flex-start; display: flex; gap: 18px; justify-content: space-between; margin-bottom: 18px; }
+.presence-heading h2 { margin: 5px 0 4px; }
+.presence-heading > div:first-child > p:last-child { color: #897f7a; font-size: 12px; margin: 0; }
+.presence-refresh { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+.presence-refresh span { color: #897f7a; font-size: 11px; }
+.presence-grid { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.presence-list { border: 1px solid #eee7e2; border-radius: 16px; min-width: 0; overflow: hidden; padding: 16px; }
+.presence-list header { align-items: center; display: flex; justify-content: space-between; margin-bottom: 10px; }
+.presence-list header h3 { font-size: 14px; margin: 4px 0 0; }
+.presence-list header > strong { align-items: center; background: #edf8f2; border-radius: 999px; color: #24875f; display: flex; font-size: 13px; justify-content: center; min-height: 32px; min-width: 38px; padding: 0 9px; }
+.presence-members { max-height: 330px; overflow: auto; }
+.presence-member { align-items: center; border-top: 1px solid #f1ece8; display: flex; gap: 10px; min-width: 0; padding: 10px 2px; }
+.presence-dot { background: #32a978; border: 3px solid #e7f6ee; border-radius: 50%; flex: 0 0 12px; height: 12px; }
+.presence-member > div { display: grid; flex: 1; gap: 2px; min-width: 0; }
+.presence-member strong { color: #352e2a; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.presence-member span { color: #8d827d; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.presence-member time { color: #8d827d; flex: 0 0 auto; font-size: 10px; }
+.presence-empty,.presence-loading { color: #8d827d; font-size: 12px; padding: 12px 0; }
+.presence-list > .text-button { margin-top: 10px; padding: 5px 0; }
+.presence-error { background: #fff2ef; border-radius: 9px; color: #a43c31; font-size: 12px; line-height: 1.5; padding: 10px 12px; }
+@media (max-width: 620px) {
+  .live-presence-panel { padding: 17px; }
+  .presence-heading { align-items: stretch; flex-direction: column; gap: 12px; }
+  .presence-refresh { justify-content: space-between; }
+  .presence-grid { grid-template-columns: 1fr; }
+}

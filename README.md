@@ -48,3 +48,16 @@ Deploy both `admin-portal` and `content-moderation` so they use the shared
 photo-safety scanner. Rejected photos cannot be overridden; photos needing
 manual review can be published only after the Super Admin confirms that the
 photo meets the Host photo-safety rules.
+
+## Live online members
+
+The Overview page reports Hosts and male members whose app has sent a presence
+heartbeat within the last 60 seconds. It refreshes every 30 seconds and shows
+member-level details only to administrators with the corresponding Hosts or
+Users page access.
+
+Before deploying this feature, apply
+`../aasai-talk/supabase/migrations/20261019000100_track_male_member_online_presence.sql`,
+deploy the updated `host-presence` and `admin-portal` Edge Functions from the
+app repository, and deploy this admin portal. Male-member status is refreshed
+while the app is active; the migration also updates the in-app Privacy Policy.
