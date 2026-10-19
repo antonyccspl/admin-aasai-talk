@@ -60,7 +60,10 @@ online/offline filtering. The Users workspace can be filtered to Hosts or male
 members.
 
 Before deploying this feature, apply
-`../aasai-talk/supabase/migrations/20261019000100_track_male_member_online_presence.sql`,
+`../aasai-talk/supabase/migrations/20261019000100_track_male_member_online_presence.sql`
+and
+`../aasai-talk/supabase/migrations/20261019000200_server_timestamp_member_presence.sql`,
 deploy the updated `host-presence` and `admin-portal` Edge Functions from the
 app repository, and deploy this admin portal. Male-member status is refreshed
-while the app is active; the migration also updates the in-app Privacy Policy.
+while the app is active; the first migration also updates the in-app Privacy
+Policy.
