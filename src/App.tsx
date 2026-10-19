@@ -1,6 +1,8 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -562,7 +564,8 @@ function Overview({
     checked_at: string;
   } | null>(null);
   const [presenceError, setPresenceError] = useState("");
-  const [presenceReload, setPresenceReload] = useState(0);
+  const [presenceRefreshing, setPresenceRefreshing] = useState(false);
+  const presenceRequest = useRef<Promise<void> | null>(null);
   const [range, setRange] = useState<"7" | "30" | "90" | "all" | "custom">(
     "30",
   );
@@ -593,15 +596,12 @@ function Overview({
       }
     })();
   }, [session, range, startDate, endDate]);
-  useEffect(() => {
-    let active = true;
-    let pending = false;
-    const refresh = async () => {
-      if (pending) return;
-      pending = true;
+  const refreshPresence = useCallback(async () => {
+    if (presenceRequest.current) return presenceRequest.current;
+    setPresenceRefreshing(true);
+    const request = (async () => {
       try {
         const response = await adminRequest(session, "live_presence");
-        if (!active) return;
         setPresence({
           counts: {
             hosts: Number(response.counts?.hosts || 0),
@@ -615,23 +615,24 @@ function Overview({
         });
         setPresenceError("");
       } catch (cause) {
-        if (!active) return;
         setPresenceError(
           cause instanceof Error
             ? cause.message
             : "Unable to refresh online members.",
         );
       } finally {
-        pending = false;
+        setPresenceRefreshing(false);
+        presenceRequest.current = null;
       }
-    };
-    void refresh();
-    const interval = window.setInterval(() => void refresh(), 30000);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
-  }, [session, presenceReload]);
+    })();
+    presenceRequest.current = request;
+    return request;
+  }, [session]);
+  useEffect(() => {
+    void refreshPresence();
+    const interval = window.setInterval(() => void refreshPresence(), 30000);
+    return () => window.clearInterval(interval);
+  }, [refreshPresence]);
   if (!metrics && !error)
     return (
       <section className="panel page-loader-panel">
@@ -851,9 +852,10 @@ function Overview({
             )}
             <button
               className="outline-button"
-              onClick={() => setPresenceReload((value) => value + 1)}
+              onClick={() => void refreshPresence()}
+              disabled={presenceRefreshing}
             >
-              Refresh
+              {presenceRefreshing ? "Refreshing…" : "Refresh"}
             </button>
           </div>
         </div>
@@ -2347,6 +2349,13 @@ function RecordDetails({
           ];
   if (section === "Hosts")
     rows.push(
+      ["Online status", item.is_online ? "Online now" : "Offline"],
+      [
+        "Last active",
+        item.last_seen_at
+          ? formatDateTime(String(item.last_seen_at))
+          : "No recent activity recorded",
+      ],
       ["Host application", item.status],
       ["New lead", item.is_new ? "Joined within the last 24 hours" : "No"],
       ["Submitted", formatDateTime(String(item.submitted_at || ""))],
@@ -2389,6 +2398,17 @@ function RecordDetails({
         item.status === "completed"
           ? formatDateTime(String(item.updated_at || ""))
           : "Not confirmed",
+      ],
+    );
+  if (section === "Users")
+    rows.push(
+      ["Member type", item.is_host ? "Host" : profile.gender],
+      ["Online status", item.is_online ? "Online now" : "Offline"],
+      [
+        "Last active",
+        item.last_seen_at
+          ? formatDateTime(String(item.last_seen_at))
+          : "No recent activity recorded",
       ],
     );
   if (section === "Hosts") {
@@ -2503,6 +2523,8 @@ function LiveWorkspace({
   const [notice, setNotice] = useState("");
   const [localSearch, setLocalSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [memberTypeFilter, setMemberTypeFilter] = useState("all");
+  const [presenceFilter, setPresenceFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [sort, setSort] = useState<"newest" | "oldest">("newest");
@@ -2590,6 +2612,8 @@ function LiveWorkspace({
     void load(true);
     setLocalSearch("");
     setStatusFilter("all");
+    setMemberTypeFilter("all");
+    setPresenceFilter("all");
     setDateFrom("");
     setDateTo("");
     setSort(section === "Payouts" ? "oldest" : "newest");
@@ -2603,11 +2627,16 @@ function LiveWorkspace({
     const refreshWhenReturning = () => {
       if (document.visibilityState === "visible" && hasLoaded) void load();
     };
+    const interval =
+      (section === "Hosts" || section === "Users") && hasLoaded
+        ? window.setInterval(() => void load(), 30000)
+        : null;
     window.addEventListener("focus", refreshWhenReturning);
     document.addEventListener("visibilitychange", refreshWhenReturning);
     return () => {
       window.removeEventListener("focus", refreshWhenReturning);
       document.removeEventListener("visibilitychange", refreshWhenReturning);
+      if (interval !== null) window.clearInterval(interval);
     };
   }, [section, hasLoaded]);
   const openPayout = (item: Record<string, unknown>) =>
@@ -2637,6 +2666,14 @@ function LiveWorkspace({
         (statusFilter === "all" ||
           String(item.status || item.account_status || "active") ===
             statusFilter) &&
+        (section !== "Users" ||
+          memberTypeFilter === "all" ||
+          (memberTypeFilter === "hosts" && item.is_host === true) ||
+          (memberTypeFilter === "male-users" && item.gender === "Male")) &&
+        ((section !== "Users" && section !== "Hosts") ||
+          presenceFilter === "all" ||
+          (presenceFilter === "online" && item.is_online === true) ||
+          (presenceFilter === "offline" && item.is_online !== true)) &&
         (!dateFrom || dateOnly >= dateFrom) &&
         (!dateTo || dateOnly <= dateTo)
       );
@@ -3261,7 +3298,11 @@ function LiveWorkspace({
       <div className="panel live-workspace">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">LIVE DATA</p>
+            <p className="eyebrow">
+              {section === "Hosts" || section === "Users"
+                ? "LIVE DATA · ONLINE STATUS UPDATES EVERY 30 SECONDS"
+                : "LIVE DATA"}
+            </p>
             <h2>
               {section}
               {section === "Audit log" ? "" : " operations"}
@@ -3319,6 +3360,34 @@ function LiveWorkspace({
               placeholder={`Search ${section.toLowerCase()}`}
             />
           </label>
+          {section === "Users" && (
+            <select
+              aria-label="Filter users by member type"
+              value={memberTypeFilter}
+              onChange={(event) => {
+                setMemberTypeFilter(event.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="all">All members</option>
+              <option value="hosts">Hosts</option>
+              <option value="male-users">Male users</option>
+            </select>
+          )}
+          {(section === "Hosts" || section === "Users") && (
+            <select
+              aria-label="Filter by online status"
+              value={presenceFilter}
+              onChange={(event) => {
+                setPresenceFilter(event.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="all">All online statuses</option>
+              <option value="online">Online now</option>
+              <option value="offline">Offline</option>
+            </select>
+          )}
           {section === "Payouts" && (
             <>
               <label className="date-filter">
@@ -3411,8 +3480,23 @@ function LiveWorkspace({
             {rows.map((item) => (
               <article key={String(item.id || item.phone)}>
                 <div>
-                  <strong>{title(item)}</strong>
+                  <div className="member-title-line">
+                    <strong>{title(item)}</strong>
+                    {(section === "Hosts" || section === "Users") && (
+                      <span
+                        className={`member-online-badge ${item.is_online === true ? "is-online" : ""}`}
+                      >
+                        {item.is_online === true ? "Online" : "Offline"}
+                      </span>
+                    )}
+                  </div>
                   <span>{detail(item)}</span>
+                  {(section === "Hosts" || section === "Users") &&
+                    typeof item.last_seen_at === "string" && (
+                      <small className="member-last-active">
+                        Last active {formatDateTime(String(item.last_seen_at))}
+                      </small>
+                    )}
                   <small>{date(item)}</small>
                   <button
                     className="detail-trigger"

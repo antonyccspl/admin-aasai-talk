@@ -54,7 +54,10 @@ photo meets the Host photo-safety rules.
 The Overview page reports Hosts and male members whose app has sent a presence
 heartbeat within the last 60 seconds. It refreshes every 30 seconds and shows
 member-level details only to administrators with the corresponding Hosts or
-Users page access.
+Users page access. The Hosts and Users workspaces also show each account's
+current online state and last active time, refresh automatically, and support
+online/offline filtering. The Users workspace can be filtered to Hosts or male
+members.
 
 Before deploying this feature, apply
 `../aasai-talk/supabase/migrations/20261019000100_track_male_member_online_presence.sql`,

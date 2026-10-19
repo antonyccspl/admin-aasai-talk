@@ -19,6 +19,10 @@
 .presence-empty,.presence-loading { color: #8d827d; font-size: 12px; padding: 12px 0; }
 .presence-list > .text-button { margin-top: 10px; padding: 5px 0; }
 .presence-error { background: #fff2ef; border-radius: 9px; color: #a43c31; font-size: 12px; line-height: 1.5; padding: 10px 12px; }
+.member-title-line { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.member-online-badge { background: #f2efed; border-radius: 999px; color: #716863!important; font-size: 10px!important; font-weight: 800; padding: 3px 8px; }
+.member-online-badge.is-online { background: #eaf7f0; color: #21815a!important; }
+.live-list .member-last-active { color: #8d827d; font-size: 10px; }
 @media (max-width: 620px) {
   .live-presence-panel { padding: 17px; }
   .presence-heading { align-items: stretch; flex-direction: column; gap: 12px; }
