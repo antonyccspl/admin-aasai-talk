@@ -42,6 +42,7 @@ type Section =
   | "Payouts"
   | "Payments"
   | "Users"
+  | "Account deletions"
   | "Reports"
   | "Support"
   | "Coin packs"
@@ -74,6 +75,7 @@ const navigation: { name: Section; icon: string; count?: string }[] = [
   { name: "Payouts", icon: "₹" },
   { name: "Payments", icon: "◫" },
   { name: "Users", icon: "◎" },
+  { name: "Account deletions", icon: "⌫" },
   { name: "Reports", icon: "◈" },
   { name: "Support", icon: "?" },
   { name: "Coin packs", icon: "◌" },
@@ -88,6 +90,7 @@ const rolePages: Record<AdminInfo["role"], Section[]> = {
     "Payouts",
     "Payments",
     "Users",
+    "Account deletions",
     "Reports",
     "Support",
     "Coin packs",
@@ -96,7 +99,7 @@ const rolePages: Record<AdminInfo["role"], Section[]> = {
   ],
   finance_admin: ["Overview", "Payouts", "Payments", "Coin packs"],
   moderator: ["Overview", "Hosts", "Users", "Reports", "Support"],
-  support: ["Overview", "Users", "Support"],
+  support: ["Overview", "Users", "Account deletions", "Support"],
 };
 
 function sectionFromUrl(): Section {
@@ -116,7 +119,6 @@ function persistSection(section: Section) {
     `${url.pathname}${url.search}${url.hash}`,
   );
 }
-
 function formatTalkDuration(seconds: unknown) {
   const safeSeconds = Math.max(0, Number(seconds) || 0);
   const hours = Math.floor(safeSeconds / 3600);
@@ -374,6 +376,7 @@ function App() {
             "Payouts",
             "Payments",
             "Users",
+            "Account deletions",
             "Reports",
             "Support",
             "Audit log",
@@ -2174,6 +2177,7 @@ type LiveSection =
   | "Payouts"
   | "Payments"
   | "Users"
+  | "Account deletions"
   | "Reports"
   | "Support"
   | "Coin packs"
@@ -2183,6 +2187,7 @@ const listActions: Record<LiveSection, string> = {
   Payouts: "list_payouts",
   Payments: "list_payments",
   Users: "list_users",
+  "Account deletions": "list_account_deletion_requests",
   Reports: "list_safety",
   Support: "list_support_tickets",
   "Coin packs": "list_coin_packs",
@@ -2272,6 +2277,7 @@ function RecordDetails({
       "Payouts",
       "Payments",
       "Users",
+      "Account deletions",
       "Reports",
       "Support",
       "Audit log",
@@ -2291,6 +2297,7 @@ function RecordDetails({
       ? (item.bank_account as Record<string, unknown>)
       : {};
   const isReport = section === "Reports";
+  const isDeletionRequest = section === "Account deletions";
   const rows: [string, unknown][] =
     section === "Audit log"
       ? [
@@ -2312,7 +2319,20 @@ function RecordDetails({
           ],
           ["Date & time", formatDateTime(String(item.created_at || ""))],
         ]
-      : isReport
+      : isDeletionRequest
+        ? [
+            ["Mobile", item.phone],
+            ["Name", profile.display_name],
+            ["Username", profile.username],
+            ["Reason", item.reason],
+            ["Details", item.details],
+            ["Status", String(item.status || "").replaceAll("_", " ")],
+            ["Requested", formatDateTime(String(item.requested_at || ""))],
+            ["Scheduled for", formatDateTime(String(item.scheduled_for || ""))],
+            ["Last reviewed", formatDateTime(String(item.reviewed_at || ""))],
+            ["Review note", item.review_note],
+          ]
+        : isReport
         ? [
             ["Reported user", item.reported_user_name],
             ["Reporter", item.reporter_name],
@@ -2628,7 +2648,10 @@ function LiveWorkspace({
       if (document.visibilityState === "visible" && hasLoaded) void load();
     };
     const interval =
-      (section === "Hosts" || section === "Users") && hasLoaded
+      (section === "Hosts" ||
+        section === "Users" ||
+        section === "Account deletions") &&
+      hasLoaded
         ? window.setInterval(() => void load(), 30000)
         : null;
     window.addEventListener("focus", refreshWhenReturning);
@@ -2656,7 +2679,7 @@ function LiveWorkspace({
     ),
   ].sort();
   const recordDate = (item: Record<string, unknown>) =>
-    String(item.created_at || item.submitted_at || "");
+    String(item.requested_at || item.created_at || item.submitted_at || "");
   const filteredRows = items
     .filter((item) => {
       const value = recordDate(item);
@@ -2738,10 +2761,16 @@ function LiveWorkspace({
       return item.is_new ? "New today · Not a Host yet" : "Not a Host yet";
     if (section === "Support")
       return `${String(item.category || "other")} · ${value.replaceAll("_", " ")}`;
+    if (section === "Account deletions")
+      return value === "processing" ? "In review" : value[0].toUpperCase() + value.slice(1);
     return value === "archived" ? "Deleted" : value;
   };
   const statusLabel = (status: string) =>
-    section === "Payouts"
+    section === "Account deletions"
+      ? status === "processing"
+        ? "In review"
+        : status[0].toUpperCase() + status.slice(1)
+      : section === "Payouts"
       ? status === "pending"
         ? "Pending review"
         : status === "in_review" || status === "processing"
@@ -2755,7 +2784,9 @@ function LiveWorkspace({
                 : status
       : status;
   const date = (item: Record<string, unknown>) =>
-    section === "Payouts"
+    section === "Account deletions"
+      ? `Requested ${formatDateTime(String(item.requested_at || ""))} · Scheduled ${formatDateTime(String(item.scheduled_for || ""))}`
+      : section === "Payouts"
       ? `₹${Number(item.amount_paise || 0) / 100} · Requested ${formatDateTime(String(item.created_at || ""))}${item.review_due_at ? ` · Review by ${formatDateTime(String(item.review_due_at))}` : ""} · Host total paid ₹${Number(item.total_withdrawn_paise || 0) / 100} · Available ₹${Number(item.available_earnings_paise || 0) / 100}`
       : section === "Coin packs"
         ? `₹${Number(item.price_paise || 0) / 100} · ${item.active ? "Active" : "Inactive"}`
@@ -2957,6 +2988,48 @@ function LiveWorkspace({
             disabled={disabled}
           >
             Delete user
+          </button>
+        </div>
+      );
+    }
+    if (section === "Account deletions") {
+      const status = String(item.status || "pending");
+      if (status === "cancelled" || status === "completed")
+        return (
+          <span className="action-complete">
+            {status === "cancelled" ? "Request cancelled" : "Completed"}
+          </span>
+        );
+      const review = (next: "processing" | "cancelled") => {
+        if (
+          next === "cancelled" &&
+          !window.confirm(
+            "Cancel this account-deletion request? This will not delete the account.",
+          )
+        )
+          return;
+        const note =
+          next === "cancelled"
+            ? window.prompt("Optional cancellation note:") || ""
+            : "";
+        void act(
+          "review_account_deletion_request",
+          item,
+          { phone: item.phone, status: next, note: note.trim() },
+          next === "processing"
+            ? "Deletion request moved to review."
+            : "Deletion request cancelled.",
+        );
+      };
+      return (
+        <div className="record-actions">
+          {status === "pending" && (
+            <button onClick={() => review("processing")} disabled={disabled}>
+              Start review
+            </button>
+          )}
+          <button onClick={() => review("cancelled")} disabled={disabled}>
+            Cancel request
           </button>
         </div>
       );
