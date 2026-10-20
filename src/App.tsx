@@ -3260,15 +3260,22 @@ function LiveWorkspace({
           item={hostAssistTarget}
           saving={saving !== null}
           onClose={() => setHostAssistTarget(null)}
-          onSave={(payload) => {
-            void act(
-              "assist_host_onboarding",
-              hostAssistTarget,
-              payload,
-              payload.approve
-                ? "Host approved after assisted setup."
-                : "Host details saved for review.",
-            ).then(() => setHostAssistTarget(null));
+          onSave={async (payload) => {
+            setSaving(String(hostAssistTarget.phone || ""));
+            setError("");
+            setNotice("");
+            try {
+              await adminRequest(session, "assist_host_onboarding", payload);
+              setHostAssistTarget(null);
+              await load();
+              setNotice(
+                payload.approve
+                  ? "Host approved after assisted setup."
+                  : "Host details saved for review.",
+              );
+            } finally {
+              setSaving(null);
+            }
           }}
         />
       )}
@@ -3764,7 +3771,7 @@ function HostOnboardingModal({
   item: Record<string, unknown>;
   saving: boolean;
   onClose: () => void;
-  onSave: (payload: Record<string, unknown>) => void;
+  onSave: (payload: Record<string, unknown>) => Promise<void>;
 }) {
   const profile =
     item.profile && typeof item.profile === "object"
@@ -3776,9 +3783,7 @@ function HostOnboardingModal({
       : {};
   const [pan, setPan] = useState("");
   const [aadhaar, setAadhaar] = useState("");
-  const [holder, setHolder] = useState(
-    String(existing.account_holder_name || profile.display_name || ""),
-  );
+  const [holder, setHolder] = useState(String(existing.account_holder_name || ""));
   const [method, setMethod] = useState<"upi" | "bank">(
     existing.payout_method === "bank" ? "bank" : "upi",
   );
@@ -3787,15 +3792,46 @@ function HostOnboardingModal({
   const [ifsc, setIfsc] = useState(String(existing.ifsc_code || ""));
   const [verified, setVerified] = useState(existing.status === "verified");
   const [approve, setApprove] = useState(true);
+  const [saveError, setSaveError] = useState("");
   const ready =
-    pan.trim().length === 10 &&
-    aadhaar.replace(/\s/g, "").length === 12 &&
+    /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan.trim()) &&
+    /^\d{12}$/.test(aadhaar.replace(/\s/g, "")) &&
     holder.trim().length >= 2 &&
+    holder.trim().length <= 120 &&
     (method === "upi"
-      ? upi.includes("@")
-      : account.replace(/\s/g, "").length >= 9 && ifsc.trim().length === 11);
+      ? /^[A-Za-z0-9._-]{2,255}@[A-Za-z][A-Za-z0-9._-]{1,64}$/.test(upi.trim())
+      : /^\d{9,18}$/.test(account.replace(/\s/g, "")) &&
+        /^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc.trim().toUpperCase()));
+  const submit = async () => {
+    if (!ready || saving) return;
+    setSaveError("");
+    try {
+      await onSave({
+        phone: item.phone,
+        pan_number: pan,
+        aadhaar_number: aadhaar,
+        account_holder_name: holder,
+        payout_method: method,
+        upi_id: upi,
+        account_number: account,
+        ifsc_code: ifsc,
+        payout_verified: verified,
+        approve,
+      });
+    } catch (cause) {
+      setSaveError(
+        cause instanceof Error ? cause.message : "Unable to save Host details.",
+      );
+    }
+  };
   return (
-    <div className="drawer-backdrop" role="presentation" onMouseDown={onClose}>
+    <div
+      className="drawer-backdrop"
+      role="presentation"
+      onMouseDown={() => {
+        if (!saving) onClose();
+      }}
+    >
       <section
         className="record-drawer"
         role="dialog"
@@ -3809,7 +3845,12 @@ function HostOnboardingModal({
             <p className="eyebrow">ASSISTED HOST ONBOARDING</p>
             <h2>{String(profile.display_name || item.phone || "New Host")}</h2>
           </div>
-          <button className="drawer-close" onClick={onClose} aria-label="Close">
+          <button
+            className="drawer-close"
+            onClick={onClose}
+            aria-label="Close"
+            disabled={saving}
+          >
             ×
           </button>
         </header>
@@ -3939,6 +3980,11 @@ function HostOnboardingModal({
             Approve this member as a Host now.
             </label>
           </section>
+          {saveError && (
+            <p className="login-message" role="alert">
+              {saveError}
+            </p>
+          )}
           <div className="host-onboarding-footer">
             <button
               className="outline-button"
@@ -3950,20 +3996,7 @@ function HostOnboardingModal({
             <button
               className="primary-button"
               disabled={!ready || saving}
-              onClick={() =>
-                onSave({
-                  phone: item.phone,
-                  pan_number: pan,
-                  aadhaar_number: aadhaar,
-                  account_holder_name: holder,
-                  payout_method: method,
-                  upi_id: upi,
-                  account_number: account,
-                  ifsc_code: ifsc,
-                  payout_verified: verified,
-                  approve,
-                })
-              }
+              onClick={() => void submit()}
             >
               {saving
                 ? "Saving…"
