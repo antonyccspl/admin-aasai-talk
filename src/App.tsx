@@ -24,6 +24,7 @@ import "./performance-alignment.css";
 import "./report-center.css";
 import "./offers.css";
 import "./compact-portal.css";
+import "./portal-polish.css";
 
 type Section = "Overview" | "Performance" | "Hosts" | "Payouts" | "Payments" | "Users" | "Reports" | "Coin packs" | "Admin access" | "Audit log";
 type AdminInfo = { id: string; email: string; role: "super_admin" | "finance_admin" | "moderator" | "support"; pages: Section[] };
@@ -34,6 +35,13 @@ const navigation: { name: Section; icon: string; count?: string }[] = [
   { name: "Payouts", icon: "₹" }, { name: "Payments", icon: "◫" }, { name: "Users", icon: "◎" },
   { name: "Reports", icon: "◈" }, { name: "Coin packs", icon: "◌" }, { name: "Admin access", icon: "◉" }, { name: "Audit log", icon: "◷" },
 ];
+const sectionDescriptions: Record<Section, string> = {
+  "Overview": "A clear view of your daily operations.", "Performance": "Understand activity and trends.",
+  "Hosts": "Review host applications and profiles.", "Payouts": "Review and manage withdrawal requests.",
+  "Payments": "Find and review payment activity.", "Users": "Find and manage member accounts.",
+  "Reports": "Review reports and support safer conversations.", "Coin packs": "Manage coin packs and special offers.",
+  "Admin access": "Manage administrator access and roles.", "Audit log": "Review administrative activity.",
+};
 const rolePages: Record<AdminInfo["role"], Section[]> = {
   super_admin: ["Overview", "Performance", "Hosts", "Payouts", "Payments", "Users", "Reports", "Coin packs", "Admin access", "Audit log"],
   finance_admin: ["Overview", "Payouts", "Payments", "Coin packs"],
@@ -93,10 +101,10 @@ function App() {
   const logout = async () => { setSigningOut(true); await supabase.auth.signOut(); setAdminInfo(null); setSession(null); setAccess("denied"); setSigningOut(false); };
   return <main className={`admin-shell ${navigationOpen ? "navigation-open" : ""}`}>
     <button className="mobile-nav-backdrop" aria-label="Close navigation" onClick={() => setNavigationOpen(false)} />
-    <aside className="sidebar"><div className="brand"><span className="brand-mark">A</span><span>Aasai Talk</span></div><div className="portal-label">ADMIN PORTAL</div><nav aria-label="Admin sections">
-      {navigation.filter((item) => adminInfo?.pages.includes(item.name)).map((item) => <button key={item.name} className={`nav-item ${section === item.name ? "selected" : ""}`} onClick={() => { setSection(item.name); setNavigationOpen(false); }}><span className="nav-icon">{item.icon}</span><span>{item.name}</span>{item.count && <span className="nav-count">{item.count}</span>}</button>)}
+    <aside className="sidebar" id="admin-navigation"><div className="brand"><span className="brand-mark">A</span><span>Aasai Talk</span></div><div className="portal-label">ADMIN PORTAL</div><nav aria-label="Admin sections">
+      {navigation.filter((item) => adminInfo?.pages.includes(item.name)).map((item) => <button key={item.name} className={`nav-item ${section === item.name ? "selected" : ""}`} aria-current={section === item.name ? "page" : undefined} onClick={() => { setSection(item.name); setSearch(""); setSearchResults([]); setNavigationOpen(false); }}><span className="nav-icon">{item.icon}</span><span>{item.name}</span>{item.count && <span className="nav-count">{item.count}</span>}</button>)}
     </nav><div className="sidebar-bottom"><div className="sidebar-footer"><span className="status-dot" />Secure server actions only</div><button className="logout-button" onClick={() => void logout()} disabled={signingOut}>{signingOut ? "Logging out…" : "↪  Log out"}</button></div></aside>
-    <section className="content"><header className="topbar"><div className="page-title"><button className="mobile-menu-button" aria-label="Open navigation" aria-expanded={navigationOpen} onClick={() => setNavigationOpen(true)}>☰</button><div><p className="eyebrow">AASAI TALK · ADMIN</p><h1>{sectionTitle}</h1></div></div><div className="topbar-actions"><div className="global-search"><label className="search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search users, Hosts, payouts…" aria-label="Search portal records" /></label>{searchResults.length > 0 && <div className="search-results" role="listbox">{searchResults.map((result,index)=><button key={`${String(result.kind)}-${String(result.query)}-${index}`} onClick={() => { setSection(result.section as Section); setSearch(String(result.query || "")); setSearchResults([]); }}><span>{String(result.kind)}</span><strong>{String(result.title)}</strong><small>{String(result.subtitle)}</small></button>)}</div>}</div><div className="admin-identity" title={adminInfo?.role === "super_admin" ? "Signed in as Super Admin" : "Signed in as Staff Admin"}><span className="admin-avatar">{adminInfo?.role === "super_admin" ? "SA" : "AD"}</span><span className="admin-role-label">{adminInfo?.role === "super_admin" ? "Super Admin" : "Staff Admin"}</span></div></div></header>
+    <section className="content"><header className="topbar"><div className="page-title"><button className="mobile-menu-button" aria-label="Open navigation" aria-expanded={navigationOpen} aria-controls="admin-navigation" onClick={() => setNavigationOpen(true)}>☰</button><div><p className="eyebrow">AASAI TALK · ADMIN</p><h1>{sectionTitle}</h1><p className="section-description">{sectionDescriptions[section]}</p></div></div><div className="topbar-actions"><div className="global-search"><label className="search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search users, Hosts, payouts…" aria-label="Search portal records" /></label>{searchResults.length > 0 && <div className="search-results" role="listbox">{searchResults.map((result,index)=><button key={`${String(result.kind)}-${String(result.query)}-${index}`} onClick={() => { setSection(result.section as Section); setSearch(String(result.query || "")); setSearchResults([]); }}><span>{String(result.kind)}</span><strong>{String(result.title)}</strong><small>{String(result.subtitle)}</small></button>)}</div>}</div><div className="admin-identity" title={adminInfo?.role === "super_admin" ? "Signed in as Super Admin" : "Signed in as Staff Admin"}><span className="admin-avatar">{adminInfo?.role === "super_admin" ? "SA" : "AD"}</span><span className="admin-role-label">{adminInfo?.role === "super_admin" ? "Super Admin" : "Staff Admin"}</span></div></div></header>
       {section === "Overview" ? <Overview key={section} session={session} onNavigate={setSection} /> : section === "Performance" ? <PerformanceReports key={section} session={session} /> : section === "Admin access" && adminInfo?.role === "super_admin" ? <AdminAccess key={section} session={session} /> : section === "Coin packs" ? <SpecialOffers key={section} session={session} /> : ["Hosts", "Payouts", "Payments", "Users", "Reports", "Audit log"].includes(section) ? <LiveWorkspace key={section} section={section as LiveSection} session={session} query={search} /> : <QueuePage section={section} query={search} />}
     </section>
   </main>;

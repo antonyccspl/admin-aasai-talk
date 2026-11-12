@@ -1,0 +1,20 @@
+/* Clear hierarchy and accessible interaction states across the portal. */
+.admin-shell { background: #f7f6f8; }
+.sidebar { background: #211b28; border-right: 1px solid #392e40; }
+.brand { color: #fff; letter-spacing: -.02em; }
+.brand-mark { background: linear-gradient(145deg,#d45870,#a62f50); color: #fff; box-shadow: 0 6px 18px #0d071e55; }
+.portal-label { color: #b6a6b8; font-size: 10px; letter-spacing: .14em; }
+.nav-item { min-height: 44px; color: #e1d9e2; font-size: 13px; transition: background .15s ease, color .15s ease; }
+.nav-item:hover { background: #ffffff12; color: #fff; }
+.nav-item.selected { background: #f6e5e9; color: #8e2849; box-shadow: inset 3px 0 #c94869; }
+.nav-icon { opacity: .9; }
+.sidebar-bottom { background: #211b28; }
+.content { padding-top: 28px; }
+.topbar { gap: 22px; }
+.page-title h1 { letter-spacing: -.035em; }
+.section-description { margin: 6px 0 0; color: #746b76; font-size: 13px; line-height: 1.4; }
+.search { border-radius: 12px; background: #fff; box-shadow: 0 3px 14px #291a2b0a; }
+.panel, .metric, .live-workspace { box-shadow: 0 8px 28px #30203608; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #c34f70; outline-offset: 2px; }
+@media (max-width: 900px) { .section-description { font-size: 12px; } }
+@media (max-width: 620px) { .content { padding: 20px 16px 36px; } .topbar { gap: 12px; } .section-description { max-width: 250px; } .sidebar-bottom { background: transparent; } }
