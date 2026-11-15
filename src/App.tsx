@@ -2221,16 +2221,22 @@ type InstagramHostSubmission = {
   aadhaarFile: File;
   panFile: File;
 };
+type HostEditSubmission = {
+  payload: Record<string, unknown>;
+  photo?: File;
+  aadhaarFile?: File;
+  panFile?: File;
+};
 async function adminMultipartRequest(
   session: Session,
   action: string,
-  submission: InstagramHostSubmission,
+  submission: InstagramHostSubmission | HostEditSubmission,
 ) {
   const form = new FormData();
   form.set("payload", JSON.stringify({ action, ...submission.payload }));
-  form.set("photo", submission.photo);
-  form.set("aadhaar_file", submission.aadhaarFile);
-  form.set("pan_file", submission.panFile);
+  if (submission.photo) form.set("photo", submission.photo);
+  if (submission.aadhaarFile) form.set("aadhaar_file", submission.aadhaarFile);
+  if (submission.panFile) form.set("pan_file", submission.panFile);
   const response = await fetch(
     `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-portal`,
     {
@@ -2388,10 +2394,20 @@ function RecordDetails({
       ["New lead", item.is_new ? "Joined within the last 24 hours" : "No"],
       ["Submitted", formatDateTime(String(item.submitted_at || ""))],
       [
+        "Pending login phone",
+        item.pending_phone_change && typeof item.pending_phone_change === "object"
+          ? (item.pending_phone_change as Record<string, unknown>).new_phone
+          : "No pending change",
+      ],
+      [
         "Aadhaar document",
         application.aadhaarDocument || "No securely stored file",
       ],
       ["PAN document", application.panDocument || "No securely stored file"],
+      ["Audio calls", application.audio === true ? "Enabled" : "Disabled"],
+      ["Video calls", application.video === true ? "Enabled" : "Disabled"],
+      ["Accepting audio calls", item.accepting_audio_calls === true ? "Yes" : "No"],
+      ["Accepting video calls", item.accepting_video_calls === true ? "Yes" : "No"],
     );
   if (section === "Payments")
     rows.push(
@@ -2605,6 +2621,7 @@ function LiveWorkspace({
     string,
     unknown
   > | null>(null);
+  const [hostEditTarget, setHostEditTarget] = useState<Record<string, unknown> | null>(null);
   const [creatingInstagramHost, setCreatingInstagramHost] = useState(false);
   const load = async (initial = false) => {
     if (initial || !hasLoaded) setLoading(true);
@@ -2928,6 +2945,11 @@ function LiveWorkspace({
       if (status === "approved")
         return (
           <div className="record-actions">
+            {canCreateHost && (
+              <button onClick={() => setHostEditTarget(item)} disabled={disabled}>
+                Edit details
+              </button>
+            )}
             <button
               onClick={() =>
                 void act(
@@ -3474,6 +3496,30 @@ function LiveWorkspace({
           }}
         />
       )}
+      {hostEditTarget && (
+        <HostEditModal
+          item={hostEditTarget}
+          saving={saving === String(hostEditTarget.phone || "")}
+          onClose={() => setHostEditTarget(null)}
+          onSave={async (submission) => {
+            setSaving(String(hostEditTarget.phone || ""));
+            setError("");
+            setNotice("");
+            try {
+              const result = await adminMultipartRequest(session, "update_host_details", submission);
+              setHostEditTarget(null);
+              await load();
+              setNotice(
+                result.phone_change_requested === true
+                  ? "Host details updated. The Host must confirm the new phone number in the app."
+                  : "Host details updated.",
+              );
+            } finally {
+              setSaving(null);
+            }
+          }}
+        />
+      )}
       {creatingInstagramHost && (
         <InstagramHostModal
           saving={saving !== null}
@@ -3974,6 +4020,292 @@ function PayoutReviewModal({
     </div>
   );
 }
+function HostEditModal({
+  item,
+  saving,
+  onClose,
+  onSave,
+}: {
+  item: Record<string, unknown>;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (submission: HostEditSubmission) => Promise<void>;
+}) {
+  const profile =
+    item.profile && typeof item.profile === "object"
+      ? (item.profile as Record<string, unknown>)
+      : {};
+  const application =
+    item.application_profile && typeof item.application_profile === "object"
+      ? (item.application_profile as Record<string, unknown>)
+      : {};
+  const payout =
+    item.bank_account && typeof item.bank_account === "object"
+      ? (item.bank_account as Record<string, unknown>)
+      : {};
+  const compliance =
+    item.compliance && typeof item.compliance === "object"
+      ? (item.compliance as Record<string, unknown>)
+      : {};
+  const pendingPhone =
+    item.pending_phone_change && typeof item.pending_phone_change === "object"
+      ? (item.pending_phone_change as Record<string, unknown>)
+      : null;
+  const [name, setName] = useState(String(profile.display_name || ""));
+  const [username, setUsername] = useState(String(profile.username || ""));
+  const [dateOfBirth, setDateOfBirth] = useState(String(profile.date_of_birth || ""));
+  const [city, setCity] = useState(String(profile.city || ""));
+  const [bio, setBio] = useState(String(profile.bio || ""));
+  const [languages, setLanguages] = useState(
+    Array.isArray(profile.languages) ? profile.languages.filter((value): value is string => typeof value === "string") : [],
+  );
+  const [interests, setInterests] = useState(
+    Array.isArray(profile.interests) ? profile.interests.filter((value): value is string => typeof value === "string") : [],
+  );
+  const [audio, setAudio] = useState(application.audio === true || application.audio === "true");
+  const [video, setVideo] = useState(application.video === true || application.video === "true");
+  const [acceptingAudioCalls, setAcceptingAudioCalls] = useState(item.accepting_audio_calls !== false);
+  const [acceptingVideoCalls, setAcceptingVideoCalls] = useState(item.accepting_video_calls !== false);
+  const [newPhone, setNewPhone] = useState("");
+  const [photo, setPhoto] = useState<File | undefined>();
+  const [aadhaarFile, setAadhaarFile] = useState<File | undefined>();
+  const [panFile, setPanFile] = useState<File | undefined>();
+  const [pan, setPan] = useState("");
+  const [aadhaar, setAadhaar] = useState("");
+  const [identityAttested, setIdentityAttested] = useState(false);
+  const [panVerified, setPanVerified] = useState(compliance.pan_verified === true);
+  const [aadhaarVerified, setAadhaarVerified] = useState(compliance.aadhaar_verified === true);
+  const [method, setMethod] = useState<"upi" | "bank" | "">(
+    payout.payout_method === "upi" || payout.payout_method === "bank" ? payout.payout_method : "",
+  );
+  const [holder, setHolder] = useState(String(payout.account_holder_name || ""));
+  const [upi, setUpi] = useState(String(payout.upi_id || ""));
+  const [account, setAccount] = useState(String(payout.account_number || ""));
+  const [ifsc, setIfsc] = useState(String(payout.ifsc_code || ""));
+  const [payoutAttested, setPayoutAttested] = useState(false);
+  const [photoAttested, setPhotoAttested] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const hasPayoutInput = !!(method || holder.trim() || upi.trim() || account.trim() || ifsc.trim());
+  const payoutValid =
+    (!hasPayoutInput && !payout.payout_method) ||
+    (hasPayoutInput &&
+    (!!method &&
+      holder.trim().length >= 2 &&
+      holder.trim().length <= 120 &&
+      (method === "upi"
+        ? /^[A-Za-z0-9._-]{2,255}@[A-Za-z][A-Za-z0-9._-]{1,64}$/.test(upi.trim())
+        : /^\d{9,18}$/.test(account.replace(/\s/g, "")) &&
+          /^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc.trim().toUpperCase()))));
+  const identityReviewRequired =
+    !!(pan || aadhaar || panFile || aadhaarFile) ||
+    panVerified !== (compliance.pan_verified === true) ||
+    aadhaarVerified !== (compliance.aadhaar_verified === true);
+  const ready =
+    name.trim().length >= 2 &&
+    name.trim().length <= 50 &&
+    /^[A-Za-z0-9_]{3,20}$/.test(username.trim()) &&
+    isAdultHostDateOfBirth(dateOfBirth) &&
+    city.trim().length >= 2 &&
+    city.trim().length <= 80 &&
+    bio.trim().length >= 12 &&
+    bio.trim().length <= 500 &&
+    languages.length >= 1 &&
+    languages.length <= 4 &&
+    interests.length >= 1 &&
+    interests.length <= 6 &&
+    (audio || video) &&
+    (!acceptingAudioCalls || audio) &&
+    (!acceptingVideoCalls || video) &&
+    (!!profile.avatar_url || !!photo) &&
+    (!photo || photoAttested) &&
+    (!identityReviewRequired || identityAttested) &&
+    (!photo || isValidHostUpload(photo, hostPhotoTypes, 5 * 1024 * 1024)) &&
+    (!aadhaarFile || isValidHostUpload(aadhaarFile, hostDocumentTypes, 10 * 1024 * 1024)) &&
+    (!panFile || isValidHostUpload(panFile, hostDocumentTypes, 10 * 1024 * 1024)) &&
+    ((!pan && !panFile) || (/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan) && !!panFile)) &&
+    ((!aadhaar && !aadhaarFile) || (/^\d{12}$/.test(aadhaar) && !!aadhaarFile)) &&
+    payoutValid &&
+    (!newPhone.trim() || /^\+91\d{10}$/.test(newPhone.trim()));
+  const toggleOption = (
+    current: string[],
+    value: string,
+    setValue: (next: string[]) => void,
+    maximum: number,
+  ) => {
+    setValue(
+      current.includes(value)
+        ? current.filter((entry) => entry !== value)
+        : current.length < maximum
+          ? [...current, value]
+          : current,
+    );
+  };
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!ready || saving) return;
+    setSaveError("");
+    try {
+      await onSave({
+        photo,
+        aadhaarFile,
+        panFile,
+        payload: {
+          phone: item.phone,
+          display_name: name.trim(),
+          username: username.trim(),
+          date_of_birth: dateOfBirth,
+          city: city.trim(),
+          bio: bio.trim(),
+          languages,
+          interests,
+          audio,
+          video,
+          accepting_audio_calls: acceptingAudioCalls,
+          accepting_video_calls: acceptingVideoCalls,
+          new_phone: newPhone.trim(),
+          pan_number: pan.trim().toUpperCase(),
+          aadhaar_number: aadhaar.replace(/\s/g, ""),
+          admin_identity_review_attested: identityAttested,
+          pan_verified: panVerified,
+          aadhaar_verified: aadhaarVerified,
+          account_holder_name: holder.trim(),
+          payout_method: method,
+          upi_id: upi.trim(),
+          account_number: account.replace(/\s/g, ""),
+          ifsc_code: ifsc.trim().toUpperCase(),
+          payout_verified: payoutAttested,
+          admin_payout_review_attested: payoutAttested,
+          admin_photo_safety_attested: photoAttested,
+        },
+      });
+    } catch (cause) {
+      setSaveError(cause instanceof Error ? cause.message : "Unable to update Host details.");
+    }
+  };
+  return (
+    <div
+      className="drawer-backdrop"
+      role="presentation"
+      onMouseDown={() => {
+        if (!saving) onClose();
+      }}
+    >
+      <section
+        className="record-drawer instagram-host-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit Host details"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <p className="eyebrow">EDIT APPROVED HOST</p>
+            <h2>{String(profile.display_name || item.phone || "Host")}</h2>
+          </div>
+          <button className="drawer-close" onClick={onClose} aria-label="Close" disabled={saving}>×</button>
+        </header>
+        <form className="detail-card assisted-host-onboarding" onSubmit={(event) => void submit(event)}>
+          <div className="host-onboarding-notice">
+            <span aria-hidden="true">◈</span>
+            <p>Changes to profile details publish immediately. New photos require your safety review. Full PAN/Aadhaar values are used only to calculate their final four characters and are not saved.</p>
+          </div>
+          <section className="host-onboarding-section">
+            <div className="host-onboarding-section-heading">
+              <p className="eyebrow">01 · PROFILE</p>
+              <h3>Public Host details</h3>
+            </div>
+            <div className="host-onboarding-grid">
+              <label className="auth-field"><span>Display name</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={50} required /></label>
+              <label className="auth-field"><span>Username</span><input value={username} onChange={(event) => setUsername(event.target.value)} maxLength={20} required /></label>
+              <label className="auth-field"><span>Date of birth</span><input type="date" value={dateOfBirth} max={maximumHostDateOfBirth()} onChange={(event) => setDateOfBirth(event.target.value)} required /></label>
+              <label className="auth-field"><span>City</span><input value={city} onChange={(event) => setCity(event.target.value)} maxLength={80} required /></label>
+            </div>
+            <label className="auth-field"><span>Bio</span><textarea value={bio} onChange={(event) => setBio(event.target.value)} rows={3} maxLength={500} required /></label>
+            <div>
+              <p className="host-choice-label">Languages · choose 1–4</p>
+              <div className="host-choice-grid">
+                {instagramHostLanguages.map((value) => (
+                  <label className="host-choice" key={value}><input type="checkbox" checked={languages.includes(value)} onChange={() => toggleOption(languages, value, setLanguages, 4)} />{value}</label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="host-choice-label">Interests · choose 1–6</p>
+              <div className="host-choice-grid">
+                {instagramHostInterests.map((value) => (
+                  <label className="host-choice" key={value}><input type="checkbox" checked={interests.includes(value)} onChange={() => toggleOption(interests, value, setInterests, 6)} />{value}</label>
+                ))}
+              </div>
+            </div>
+            {typeof profile.avatar_url === "string" && profile.avatar_url && (
+              <img src={profile.avatar_url} alt="Current Host profile" className="host-edit-photo-preview" />
+            )}
+            <label className="auth-field"><span>Replace profile photo (optional)</span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setPhoto(event.target.files?.[0])} /><small>JPG, PNG, or WEBP up to 5 MB. Published after upload and your safety attestation.</small></label>
+            {photo && (
+              <label className="payout-confirm-check"><input type="checkbox" checked={photoAttested} onChange={(event) => setPhotoAttested(event.target.checked)} />I personally reviewed this photo and confirm it follows the Host photo-safety rules.</label>
+            )}
+          </section>
+          <section className="host-onboarding-section">
+            <div className="host-onboarding-section-heading"><p className="eyebrow">02 · CALL SETTINGS</p><h3>Call capabilities and preferences</h3></div>
+            <div className="host-choice-grid">
+              <label className="host-choice"><input type="checkbox" checked={audio} onChange={(event) => { setAudio(event.target.checked); if (!event.target.checked) setAcceptingAudioCalls(false); }} />Audio calls enabled</label>
+              <label className="host-choice"><input type="checkbox" checked={video} onChange={(event) => { setVideo(event.target.checked); if (!event.target.checked) setAcceptingVideoCalls(false); }} />Video calls enabled</label>
+              <label className="host-choice"><input type="checkbox" checked={acceptingAudioCalls} disabled={!audio} onChange={(event) => setAcceptingAudioCalls(event.target.checked)} />Accept audio calls</label>
+              <label className="host-choice"><input type="checkbox" checked={acceptingVideoCalls} disabled={!video} onChange={(event) => setAcceptingVideoCalls(event.target.checked)} />Accept video calls</label>
+            </div>
+          </section>
+          <section className="host-onboarding-section">
+            <div className="host-onboarding-section-heading"><p className="eyebrow">03 · LOGIN PHONE</p><h3>Request a verified phone-number change</h3></div>
+            {pendingPhone && <p className="host-onboarding-help">A change to {String(pendingPhone.new_phone || "")} is already pending until {formatDateTime(String(pendingPhone.expires_at || ""))}. The Host must complete OTP verification in their signed-in app.</p>}
+            <label className="auth-field"><span>New Indian mobile number (optional)</span><input value={newPhone} onChange={(event) => setNewPhone(event.target.value.replace(/[^\d+]/g, ""))} placeholder="+919876543210" inputMode="tel" maxLength={13} /><small>The new number is not activated until the Host verifies the OTP from the app.</small></label>
+          </section>
+          <section className="host-onboarding-section">
+            <div className="host-onboarding-section-heading"><p className="eyebrow">04 · PAYOUT</p><h3>Bank account or UPI destination</h3></div>
+            <label className="auth-field"><span>Payout method</span><select value={method} onChange={(event) => setMethod(event.target.value as "upi" | "bank" | "")}><option value="">Choose payout method</option><option value="upi">UPI ID</option><option value="bank">Bank account</option></select></label>
+            {method && (
+              <>
+                <label className="auth-field"><span>Account holder name</span><input value={holder} onChange={(event) => setHolder(event.target.value)} maxLength={120} /></label>
+                {method === "upi" ? (
+                  <label className="auth-field"><span>UPI ID</span><input value={upi} onChange={(event) => setUpi(event.target.value)} /></label>
+                ) : (
+                  <div className="host-onboarding-grid">
+                    <label className="auth-field"><span>Bank account number</span><input value={account} onChange={(event) => setAccount(event.target.value.replace(/\s/g, ""))} inputMode="numeric" /></label>
+                    <label className="auth-field"><span>IFSC code</span><input value={ifsc} onChange={(event) => setIfsc(event.target.value.toUpperCase())} maxLength={11} /></label>
+                  </div>
+                )}
+                <p className="host-onboarding-help">Current destination status: {String(payout.status || "Not submitted")}. A changed destination returns to pending verification unless you attest that you verified it.</p>
+                <label className="payout-confirm-check"><input type="checkbox" checked={payoutAttested} onChange={(event) => setPayoutAttested(event.target.checked)} />I personally verified this payout destination with the Host.</label>
+              </>
+            )}
+          </section>
+          <section className="host-onboarding-section">
+            <div className="host-onboarding-section-heading"><p className="eyebrow">05 · IDENTITY DOCUMENTS</p><h3>Update private KYC records</h3></div>
+            <p className="host-onboarding-help">Saved PAN: {compliance.pan_last4 ? `••••${String(compliance.pan_last4)}` : "Not recorded"} · Aadhaar: {compliance.aadhaar_last4 ? `••••${String(compliance.aadhaar_last4)}` : "Not recorded"}. To replace an identifier, provide its full number and document together. Full identifiers are never stored.</p>
+            <div className="host-onboarding-grid">
+              <label className="auth-field"><span>Replace PAN (optional)</span><input value={pan} onChange={(event) => { setPan(event.target.value.toUpperCase()); setPanVerified(false); }} placeholder="ABCDE1234F" maxLength={10} /></label>
+              <label className="auth-field"><span>Replace Aadhaar (optional)</span><input value={aadhaar} onChange={(event) => { setAadhaar(event.target.value.replace(/\D/g, "")); setAadhaarVerified(false); }} placeholder="12-digit number" inputMode="numeric" maxLength={12} /></label>
+            </div>
+            <div className="host-onboarding-grid">
+              <label className="auth-field"><span>New Aadhaar image or PDF (optional)</span><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => { setAadhaarFile(event.target.files?.[0]); setAadhaarVerified(false); }} /></label>
+              <label className="auth-field"><span>New PAN image or PDF (optional)</span><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => { setPanFile(event.target.files?.[0]); setPanVerified(false); }} /></label>
+            </div>
+            <label className="payout-confirm-check"><input type="checkbox" checked={identityAttested} onChange={(event) => setIdentityAttested(event.target.checked)} />I personally reviewed the current or updated identity details and documents.</label>
+            <div className="host-choice-grid">
+              <label className="host-choice"><input type="checkbox" checked={panVerified} disabled={!identityAttested && !panVerified} onChange={(event) => setPanVerified(event.target.checked)} />PAN verified</label>
+              <label className="host-choice"><input type="checkbox" checked={aadhaarVerified} disabled={!identityAttested && !aadhaarVerified} onChange={(event) => setAadhaarVerified(event.target.checked)} />Aadhaar verified</label>
+            </div>
+          </section>
+          {saveError && <p className="login-message" role="alert">{saveError}</p>}
+          <div className="host-onboarding-footer">
+            <button type="button" className="outline-button" onClick={onClose} disabled={saving}>Cancel</button>
+            <button type="submit" className="primary-button" disabled={!ready || saving}>{saving ? "Saving…" : "Save Host details"}</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
 function HostOnboardingModal({
   item,
   saving,

@@ -9,5 +9,6 @@
 .host-choice-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:7px}
 .host-choice{display:flex;align-items:center;gap:8px;min-height:36px;padding:7px 9px;border:1px solid #e5dbd5;border-radius:9px;background:#fff;color:#493f3b;font-size:11px;font-weight:700}
 .host-choice input{width:15px;height:15px;flex:0 0 15px;margin:0;accent-color:#e94f5e}
+.host-edit-photo-preview{width:112px;height:112px;border:1px solid #e5dbd5;border-radius:16px;object-fit:cover}
 .instagram-host-drawer .host-onboarding-footer{position:sticky;bottom:-22px;margin:0 -22px;padding:12px 22px 22px;background:#fff}
 @media(max-width:560px){.instagram-host-drawer .host-onboarding-grid{grid-template-columns:1fr}.instagram-host-drawer .host-onboarding-footer{bottom:-18px;margin:0 -18px;padding:12px 18px 18px}}
