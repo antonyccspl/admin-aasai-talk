@@ -34,6 +34,7 @@ import "./offers.css";
 import "./compact-portal.css";
 import "./host-onboarding.css";
 import "./live-presence.css";
+import "./host-actions.css";
 
 type Section =
   | "Overview"
@@ -2872,8 +2873,9 @@ function LiveWorkspace({
       const status = String(item.status || "");
       if (status === "new" && canCreateHost)
         return (
-          <div className="record-actions">
+          <div className="record-actions host-record-actions">
             <button
+              className="host-action host-action--primary"
               onClick={() => setHostAssistTarget(item)}
               disabled={disabled}
             >
@@ -2883,9 +2885,10 @@ function LiveWorkspace({
         );
       if (status === "pending")
         return (
-          <div className="record-actions">
+          <div className="record-actions host-record-actions">
             {canCreateHost && (
               <button
+                className="host-action host-action--primary"
                 onClick={() => setHostAssistTarget(item)}
                 disabled={disabled}
               >
@@ -2893,6 +2896,7 @@ function LiveWorkspace({
               </button>
             )}
             <button
+              className="host-action host-action--approve"
               onClick={() =>
                 void act("review_host", item, { id, status: "approved" })
               }
@@ -2901,6 +2905,7 @@ function LiveWorkspace({
               Approve
             </button>
             <button
+              className="host-action host-action--reject"
               onClick={() =>
                 void act("review_host", item, { id, status: "rejected" })
               }
@@ -2912,8 +2917,9 @@ function LiveWorkspace({
         );
       if (status === "archived")
         return (
-          <div className="record-actions">
+          <div className="record-actions host-record-actions">
             <button
+              className="host-action host-action--restore"
               onClick={() =>
                 void act("review_host", item, { id, status: "approved" })
               }
@@ -2925,8 +2931,9 @@ function LiveWorkspace({
         );
       if (status === "inactive")
         return (
-          <div className="record-actions">
+          <div className="record-actions host-record-actions">
             <button
+              className="host-action host-action--activate"
               onClick={() =>
                 void act("review_host", item, { id, status: "approved" })
               }
@@ -2935,6 +2942,7 @@ function LiveWorkspace({
               Activate Host
             </button>
             <button
+              className="host-action host-action--delete"
               onClick={() =>
                 void act("review_host", item, { id, status: "archived" })
               }
@@ -2946,13 +2954,22 @@ function LiveWorkspace({
         );
       if (status === "approved")
         return (
-          <div className="record-actions">
+          <div className="record-actions host-record-actions">
             {canCreateHost && (
-              <button onClick={() => setHostEditTarget(item)} disabled={disabled}>
+              <button
+                className="host-action host-action--primary"
+                onClick={() => setHostEditTarget(item)}
+                disabled={disabled}
+              >
                 Edit details
               </button>
             )}
             <button
+              className={`host-action ${
+                item.is_online === true
+                  ? "host-action--offline"
+                  : "host-action--online"
+              }`}
               onClick={() =>
                 void act(
                   "set_host_availability",
@@ -2971,6 +2988,7 @@ function LiveWorkspace({
               {item.is_online === true ? "Go offline" : "Go online"}
             </button>
             <button
+              className="host-action host-action--inactive"
               onClick={() =>
                 void act("review_host", item, { id, status: "inactive" })
               }
@@ -2979,6 +2997,7 @@ function LiveWorkspace({
               Make inactive
             </button>
             <button
+              className="host-action host-action--delete"
               onClick={() =>
                 void act("review_host", item, { id, status: "archived" })
               }
@@ -2989,8 +3008,9 @@ function LiveWorkspace({
           </div>
         );
       return (
-        <div className="record-actions">
+        <div className="record-actions host-record-actions">
           <button
+            className="host-action host-action--inactive"
             onClick={() =>
               void act("review_host", item, { id, status: "inactive" })
             }
@@ -2999,6 +3019,7 @@ function LiveWorkspace({
             Make inactive
           </button>
           <button
+            className="host-action host-action--delete"
             onClick={() =>
               void act("review_host", item, { id, status: "archived" })
             }
@@ -3735,7 +3756,16 @@ function LiveWorkspace({
         ) : (
           <div className="live-list">
             {rows.map((item) => (
-              <article key={String(item.id || item.phone)}>
+              <article
+                key={String(item.id || item.phone)}
+                className={
+                  section === "Hosts" && item.status === "archived"
+                    ? "host-row host-row--deleted"
+                    : section === "Hosts" && item.status === "inactive"
+                      ? "host-row host-row--inactive"
+                      : undefined
+                }
+              >
                 <div>
                   <div className="member-title-line">
                     <strong>{title(item)}</strong>
@@ -3777,8 +3807,9 @@ function LiveWorkspace({
                   {extraControls(item)}
                   {section === "Hosts" && (
                     <div className="host-document-actions">
-                      <div className="record-actions">
+                      <div className="record-actions host-record-actions">
                         <button
+                          className="host-action host-action--document"
                           onClick={() => void viewDocument(item, "aadhaar")}
                           disabled={
                             saving === String(item.id) ||
@@ -3793,6 +3824,7 @@ function LiveWorkspace({
                           View Aadhaar
                         </button>
                         <button
+                          className="host-action host-action--document"
                           onClick={() => void viewDocument(item, "pan")}
                           disabled={
                             saving === String(item.id) ||

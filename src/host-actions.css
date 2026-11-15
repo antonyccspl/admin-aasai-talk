@@ -1,0 +1,85 @@
+.live-list article.host-row--inactive {
+  background: #fff8e8;
+  border-bottom-color: #ebd39e;
+  border-left: 4px solid #d39818;
+  border-radius: 10px;
+  margin: 4px 0;
+  padding: 14px 12px;
+}
+
+.live-list article.host-row--deleted {
+  background: #fff0f0;
+  border-bottom-color: #e8b8ba;
+  border-left: 4px solid #c84750;
+  border-radius: 10px;
+  margin: 4px 0;
+  padding: 14px 12px;
+}
+
+.live-workspace .host-record-actions button.host-action {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  min-height: 36px;
+  padding: 8px 9px;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.live-workspace .host-record-actions button.host-action:hover:not(:disabled) {
+  box-shadow: 0 3px 9px #39271f14;
+  transform: translateY(-1px);
+}
+
+.live-workspace .host-record-actions button.host-action:focus-visible {
+  outline: 3px solid #7c3aed55;
+  outline-offset: 2px;
+}
+
+.live-workspace .host-record-actions button.host-action--primary {
+  background: #fff0f2;
+  border-color: #f2b7c0;
+  color: #a92337;
+}
+
+.live-workspace .host-record-actions button.host-action--approve,
+.live-workspace .host-record-actions button.host-action--activate,
+.live-workspace .host-record-actions button.host-action--restore,
+.live-workspace .host-record-actions button.host-action--online {
+  background: #eaf8ef;
+  border-color: #b7e3c4;
+  color: #17653a;
+}
+
+.live-workspace .host-record-actions button.host-action--reject,
+.live-workspace .host-record-actions button.host-action--delete {
+  background: #fff0f0;
+  border-color: #edb9b9;
+  color: #a82929;
+}
+
+.live-workspace .host-record-actions button.host-action--offline {
+  background: #edf2f7;
+  border-color: #ccd6e0;
+  color: #46566a;
+}
+
+.live-workspace .host-record-actions button.host-action--inactive {
+  background: #fff6e3;
+  border-color: #ebd39e;
+  color: #8a5a08;
+}
+
+.live-workspace .host-record-actions button.host-action--document {
+  background: #edf4ff;
+  border-color: #c5d8f6;
+  color: #2755a2;
+}
+
+.live-workspace .host-record-actions button.host-action:disabled {
+  box-shadow: none;
+  opacity: 0.55;
+  transform: none;
+}
