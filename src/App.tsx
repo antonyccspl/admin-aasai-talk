@@ -2431,7 +2431,14 @@ function RecordDetails({
   if (section === "Users")
     rows.push(
       ["Member type", item.is_host ? "Host" : profile.gender],
-      ["Online status", item.is_online ? "Online now" : "Offline"],
+      [
+        "Online status",
+        item.is_in_call === true
+          ? "In call"
+          : item.is_online
+            ? "Online now"
+            : "Offline",
+      ],
       [
         "Last active",
         item.last_seen_at
@@ -2439,6 +2446,17 @@ function RecordDetails({
           : "No recent activity recorded",
       ],
     );
+  if (section === "Users" && item.is_in_call === true) {
+    rows.push([
+      "Call type",
+      item.active_call_type === "video" ? "Video" : "Audio",
+    ]);
+    if (typeof item.active_call_started_at === "string")
+      rows.push([
+        "Call started",
+        formatDateTime(item.active_call_started_at),
+      ]);
+  }
   if (section === "Hosts") {
     const compliance =
       item.compliance && typeof item.compliance === "object"
@@ -2721,8 +2739,15 @@ function LiveWorkspace({
           (memberTypeFilter === "male-users" && item.gender === "Male")) &&
         ((section !== "Users" && section !== "Hosts") ||
           presenceFilter === "all" ||
-          (presenceFilter === "online" && item.is_online === true) ||
-          (presenceFilter === "offline" && item.is_online !== true)) &&
+          (section === "Users" &&
+            presenceFilter === "in-call" &&
+            item.is_in_call === true) ||
+          (presenceFilter === "online" &&
+            item.is_online === true &&
+            (section !== "Users" || item.is_in_call !== true)) ||
+          (presenceFilter === "offline" &&
+            item.is_online !== true &&
+            (section !== "Users" || item.is_in_call !== true))) &&
         (!dateFrom || dateOnly >= dateFrom) &&
         (!dateTo || dateOnly <= dateTo)
       );
@@ -3518,16 +3543,19 @@ function LiveWorkspace({
           )}
           {(section === "Hosts" || section === "Users") && (
             <select
-              aria-label="Filter by online status"
+              aria-label="Filter by presence status"
               value={presenceFilter}
               onChange={(event) => {
                 setPresenceFilter(event.target.value);
                 setPage(1);
               }}
             >
-              <option value="all">All online statuses</option>
+              <option value="all">All presence statuses</option>
               <option value="online">Online now</option>
               <option value="offline">Offline</option>
+              {section === "Users" && (
+                <option value="in-call">In a call</option>
+              )}
             </select>
           )}
           {section === "Payouts" && (
@@ -3626,9 +3654,19 @@ function LiveWorkspace({
                     <strong>{title(item)}</strong>
                     {(section === "Hosts" || section === "Users") && (
                       <span
-                        className={`member-online-badge ${item.is_online === true ? "is-online" : ""}`}
+                        className={`member-online-badge ${
+                          section === "Users" && item.is_in_call === true
+                            ? "is-in-call"
+                            : item.is_online === true
+                              ? "is-online"
+                              : ""
+                        }`}
                       >
-                        {item.is_online === true ? "Online" : "Offline"}
+                        {section === "Users" && item.is_in_call === true
+                          ? "In call"
+                          : item.is_online === true
+                            ? "Online"
+                            : "Offline"}
                       </span>
                     )}
                   </div>
