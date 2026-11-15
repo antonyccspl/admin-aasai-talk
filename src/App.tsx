@@ -4120,6 +4120,27 @@ const instagramHostInterests = [
   "Spirituality",
   "Late night talks",
 ];
+const hostPhotoTypes = ["image/jpeg", "image/png", "image/webp"];
+const hostDocumentTypes = [...hostPhotoTypes, "application/pdf"];
+
+function maximumHostDateOfBirth() {
+  const date = new Date();
+  date.setUTCHours(0, 0, 0, 0);
+  date.setUTCFullYear(date.getUTCFullYear() - 18);
+  return date.toISOString().slice(0, 10);
+}
+
+function isAdultHostDateOfBirth(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) return false;
+  return value <= maximumHostDateOfBirth();
+}
+
+function isValidHostUpload(file: File | null, types: string[], maximumBytes: number) {
+  return !!file && file.size > 0 && file.size <= maximumBytes && types.includes(file.type);
+}
+
 function InstagramHostModal({
   saving,
   onClose,
@@ -4154,28 +4175,34 @@ function InstagramHostModal({
   const [attested, setAttested] = useState(false);
   const [photoSafetyAttested, setPhotoSafetyAttested] = useState(false);
   const [error, setError] = useState("");
-  const ready =
-    /^\+91\d{10}$/.test(phone.trim()) &&
-    name.trim().length >= 2 &&
-    username.trim().length >= 3 &&
-    !!dateOfBirth &&
-    city.trim().length >= 2 &&
-    bio.trim().length >= 12 &&
-    languages.length > 0 &&
-    interests.length > 0 &&
-    (audio || video) &&
-    !!photo &&
-    !!aadhaarFile &&
-    !!panFile &&
-    /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan.trim().toUpperCase()) &&
-    /^\d{12}$/.test(aadhaar.replace(/\s/g, "")) &&
-    holder.trim().length >= 2 &&
-    (method === "upi"
-      ? /^[A-Za-z0-9._-]{2,256}@[A-Za-z][A-Za-z0-9._-]{1,64}$/.test(upi.trim())
-      : /^\d{9,18}$/.test(account.replace(/\s/g, "")) &&
-        /^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc.trim().toUpperCase())) &&
-    attested &&
-    photoSafetyAttested;
+  const normalizedPan = pan.trim().toUpperCase();
+  const normalizedAadhaar = aadhaar.replace(/\s/g, "");
+  const normalizedAccount = account.replace(/\s/g, "");
+  const normalizedIfsc = ifsc.trim().toUpperCase();
+  const validationErrors: string[] = [];
+  if (!/^\+91\d{10}$/.test(phone.trim())) validationErrors.push("valid Indian phone number");
+  if (name.trim().length < 2 || name.trim().length > 50) validationErrors.push("display name (2–50 characters)");
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(username.trim())) validationErrors.push("username (3–20 letters, numbers, or underscores)");
+  if (!isAdultHostDateOfBirth(dateOfBirth)) validationErrors.push("valid date of birth (18 or older)");
+  if (city.trim().length < 2 || city.trim().length > 80) validationErrors.push("city (2–80 characters)");
+  if (bio.trim().length < 12 || bio.trim().length > 500) validationErrors.push("bio (12–500 characters)");
+  if (languages.length < 1 || languages.length > 4) validationErrors.push("1–4 languages");
+  if (interests.length < 1 || interests.length > 6) validationErrors.push("1–6 interests");
+  if (!audio && !video) validationErrors.push("at least one call preference");
+  if (!isValidHostUpload(photo, hostPhotoTypes, 5 * 1024 * 1024)) validationErrors.push("profile photo (JPG, PNG, or WEBP; max 5 MB)");
+  if (!isValidHostUpload(aadhaarFile, hostDocumentTypes, 10 * 1024 * 1024)) validationErrors.push("Aadhaar document (image or PDF; max 10 MB)");
+  if (!isValidHostUpload(panFile, hostDocumentTypes, 10 * 1024 * 1024)) validationErrors.push("PAN document (image or PDF; max 10 MB)");
+  if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(normalizedPan)) validationErrors.push("valid PAN number");
+  if (!/^\d{12}$/.test(normalizedAadhaar)) validationErrors.push("12-digit Aadhaar number");
+  if (holder.trim().length < 2 || holder.trim().length > 120) validationErrors.push("payout account holder name (2–120 characters)");
+  if (method === "upi") {
+    if (!/^[A-Za-z0-9._-]{2,256}@[A-Za-z][A-Za-z0-9._-]{1,64}$/.test(upi.trim())) validationErrors.push("valid UPI ID");
+  } else if (!/^\d{9,18}$/.test(normalizedAccount) || !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(normalizedIfsc)) {
+    validationErrors.push("valid bank account number and IFSC");
+  }
+  if (!attested) validationErrors.push("identity, age, and consent confirmation");
+  if (!photoSafetyAttested) validationErrors.push("profile photo safety confirmation");
+  const ready = validationErrors.length === 0;
   const toggle = (
     values: string[],
     setValues: (values: string[]) => void,
@@ -4279,6 +4306,11 @@ function InstagramHostModal({
               characters are retained for compliance.
             </p>
           </div>
+          <p className="host-onboarding-help">
+            Complete all profile fields, identity numbers and documents, payout
+            details, and the required admin confirmations before saving. Payout
+            verification and immediate approval are optional choices.
+          </p>
           <section className="host-onboarding-section" aria-labelledby="lead-profile-heading">
             <div className="host-onboarding-section-heading">
               <p className="eyebrow">01 · PROFILE</p>
@@ -4286,38 +4318,38 @@ function InstagramHostModal({
             </div>
             <div className="host-onboarding-grid">
               <label className="auth-field">
-                <span>Phone number</span>
-                <input value={phone} onChange={(event) => setPhone(event.target.value.replace(/[^\d+]/g, ""))} placeholder="+919876543210" autoComplete="tel" />
+                <span>Phone number *</span>
+                <input type="tel" inputMode="tel" required maxLength={13} value={phone} onChange={(event) => setPhone(event.target.value.replace(/[^\d+]/g, ""))} placeholder="+919876543210" autoComplete="tel" />
               </label>
               <label className="auth-field">
-                <span>Display name</span>
-                <input value={name} onChange={(event) => setName(event.target.value)} maxLength={50} />
+                <span>Display name *</span>
+                <input required value={name} onChange={(event) => setName(event.target.value)} maxLength={50} />
               </label>
               <label className="auth-field">
-                <span>Username</span>
-                <input value={username} onChange={(event) => setUsername(event.target.value.replace(/[^A-Za-z0-9_]/g, ""))} maxLength={20} placeholder="3–20 letters, numbers, or _" />
+                <span>Username *</span>
+                <input required pattern="[A-Za-z0-9_]{3,20}" value={username} onChange={(event) => setUsername(event.target.value.replace(/[^A-Za-z0-9_]/g, ""))} maxLength={20} placeholder="3–20 letters, numbers, or _" />
               </label>
               <label className="auth-field">
-                <span>Date of birth</span>
-                <input type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} />
+                <span>Date of birth (18 or older) *</span>
+                <input required type="date" max={maximumHostDateOfBirth()} value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} />
               </label>
               <label className="auth-field">
-                <span>City</span>
-                <input value={city} onChange={(event) => setCity(event.target.value)} maxLength={80} />
+                <span>City *</span>
+                <input required value={city} onChange={(event) => setCity(event.target.value)} maxLength={80} />
               </label>
               <label className="auth-field">
-                <span>Profile photo · JPG, PNG, or WEBP (max 5 MB)</span>
-                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => selectFile(event, setPhoto)} />
+                <span>Profile photo · JPG, PNG, or WEBP (max 5 MB) *</span>
+                <input required type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => selectFile(event, setPhoto)} />
                 {photo && <small>{photo.name}</small>}
               </label>
             </div>
             <label className="auth-field">
-              <span>Short bio</span>
-              <textarea value={bio} onChange={(event) => setBio(event.target.value)} maxLength={500} rows={3} />
+              <span>Short bio *</span>
+              <textarea required value={bio} onChange={(event) => setBio(event.target.value)} maxLength={500} rows={3} />
               <small>{bio.trim().length}/500 characters · at least 12 required</small>
             </label>
             <div>
-              <p className="host-choice-label">Languages · select up to 4</p>
+              <p className="host-choice-label">Languages · select 1–4 *</p>
               <div className="host-choice-grid">
                 {instagramHostLanguages.map((language) => (
                   <label key={language} className="host-choice">
@@ -4328,7 +4360,7 @@ function InstagramHostModal({
               </div>
             </div>
             <div>
-              <p className="host-choice-label">Interests · select up to 6</p>
+              <p className="host-choice-label">Interests · select 1–6 *</p>
               <div className="host-choice-grid">
                 {instagramHostInterests.map((interest) => (
                   <label key={interest} className="host-choice">
@@ -4339,7 +4371,7 @@ function InstagramHostModal({
               </div>
             </div>
             <div>
-              <p className="host-choice-label">Call preferences</p>
+              <p className="host-choice-label">Call preferences · select at least one *</p>
               <div className="host-choice-grid">
                 <label className="host-choice">
                   <input type="checkbox" checked={audio} onChange={(event) => setAudio(event.target.checked)} />
@@ -4363,22 +4395,22 @@ function InstagramHostModal({
             </p>
             <div className="host-onboarding-grid">
               <label className="auth-field">
-                <span>PAN document · image or PDF (max 10 MB)</span>
-                <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => selectFile(event, setPanFile)} />
+                <span>PAN document · image or PDF (max 10 MB) *</span>
+                <input required type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => selectFile(event, setPanFile)} />
                 {panFile && <small>{panFile.name}</small>}
               </label>
               <label className="auth-field">
-                <span>Aadhaar document · image or PDF (max 10 MB)</span>
-                <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => selectFile(event, setAadhaarFile)} />
+                <span>Aadhaar document · image or PDF (max 10 MB) *</span>
+                <input required type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => selectFile(event, setAadhaarFile)} />
                 {aadhaarFile && <small>{aadhaarFile.name}</small>}
               </label>
               <label className="auth-field">
-                <span>PAN number · retained as last four only</span>
-                <input value={pan} onChange={(event) => setPan(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="ABCDE1234F" maxLength={10} autoCapitalize="characters" />
+                <span>PAN number · retained as last four only *</span>
+                <input required pattern="[A-Za-z]{5}[0-9]{4}[A-Za-z]" value={pan} onChange={(event) => setPan(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="ABCDE1234F" maxLength={10} autoCapitalize="characters" />
               </label>
               <label className="auth-field">
-                <span>Aadhaar number · retained as last four only</span>
-                <input value={aadhaar} onChange={(event) => setAadhaar(event.target.value.replace(/\D/g, ""))} placeholder="12-digit Aadhaar" inputMode="numeric" maxLength={12} />
+                <span>Aadhaar number · retained as last four only *</span>
+                <input required pattern="[0-9]{12}" value={aadhaar} onChange={(event) => setAadhaar(event.target.value.replace(/\D/g, ""))} placeholder="12-digit Aadhaar" inputMode="numeric" maxLength={12} />
               </label>
             </div>
           </section>
@@ -4388,8 +4420,8 @@ function InstagramHostModal({
               <h3 id="instagram-payout-heading">Where should earnings be sent?</h3>
             </div>
             <label className="auth-field">
-              <span>Account holder name</span>
-              <input value={holder} onChange={(event) => setHolder(event.target.value)} maxLength={120} />
+              <span>Account holder name *</span>
+              <input required value={holder} onChange={(event) => setHolder(event.target.value)} maxLength={120} />
             </label>
             <div className="payout-method-picker" role="group" aria-label="Payout method">
               <button type="button" className={method === "upi" ? "selected" : ""} onClick={() => setMethod("upi")}>
@@ -4401,18 +4433,18 @@ function InstagramHostModal({
             </div>
             {method === "upi" ? (
               <label className="auth-field">
-                <span>UPI ID</span>
-                <input value={upi} onChange={(event) => setUpi(event.target.value)} placeholder="name@bank" />
+                <span>UPI ID *</span>
+                <input required value={upi} onChange={(event) => setUpi(event.target.value)} placeholder="name@bank" />
               </label>
             ) : (
               <div className="host-onboarding-grid">
                 <label className="auth-field">
-                  <span>Bank account number</span>
-                  <input value={account} onChange={(event) => setAccount(event.target.value.replace(/\D/g, ""))} inputMode="numeric" />
+                  <span>Bank account number *</span>
+                  <input required value={account} onChange={(event) => setAccount(event.target.value.replace(/\D/g, ""))} inputMode="numeric" maxLength={18} />
                 </label>
                 <label className="auth-field">
-                  <span>IFSC code</span>
-                  <input value={ifsc} onChange={(event) => setIfsc(event.target.value.toUpperCase())} maxLength={11} />
+                  <span>IFSC code *</span>
+                  <input required pattern="[A-Za-z]{4}0[A-Za-z0-9]{6}" value={ifsc} onChange={(event) => setIfsc(event.target.value.toUpperCase())} maxLength={11} />
                 </label>
               </div>
             )}
@@ -4423,11 +4455,11 @@ function InstagramHostModal({
               <h3 id="instagram-attestation-heading">Review before saving</h3>
             </div>
             <label className="payout-confirm-check">
-              <input type="checkbox" checked={photoSafetyAttested} onChange={(event) => setPhotoSafetyAttested(event.target.checked)} />
-              I reviewed this profile photo and confirmed it follows the Host photo-safety rules. This is required if the automatic scan requests manual review.
+              <input required type="checkbox" checked={photoSafetyAttested} onChange={(event) => setPhotoSafetyAttested(event.target.checked)} />
+              I reviewed this profile photo and confirmed it follows the Host photo-safety rules. This confirmation is required to save.
             </label>
             <label className="payout-confirm-check">
-              <input type="checkbox" checked={attested} onChange={(event) => setAttested(event.target.checked)} />
+              <input required type="checkbox" checked={attested} onChange={(event) => setAttested(event.target.checked)} />
               I personally verified this phone number, checked the original identity documents and confirmed that she is at least 18 and consents to creating this account and Host profile.
             </label>
             <label className="payout-confirm-check">
@@ -4439,6 +4471,11 @@ function InstagramHostModal({
               Approve this Host application now. If unchecked, save it for review.
             </label>
           </section>
+          {validationErrors.length > 0 && (
+            <p className="host-onboarding-help" role="status" aria-live="polite">
+              To save, complete or correct: {validationErrors.join("; ")}.
+            </p>
+          )}
           {error && <p className="login-message" role="alert">{error}</p>}
           <div className="host-onboarding-footer">
             <button type="button" className="outline-button" onClick={onClose} disabled={saving}>Cancel</button>
