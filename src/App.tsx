@@ -2925,6 +2925,45 @@ function LiveWorkspace({
             </button>
           </div>
         );
+      if (status === "approved")
+        return (
+          <div className="record-actions">
+            <button
+              onClick={() =>
+                void act(
+                  "set_host_availability",
+                  item,
+                  {
+                    phone: String(item.phone || ""),
+                    accepting_calls: item.is_online !== true,
+                  },
+                  item.is_online === true
+                    ? "Host set offline."
+                    : "Host set online.",
+                )
+              }
+              disabled={disabled}
+            >
+              {item.is_online === true ? "Go offline" : "Go online"}
+            </button>
+            <button
+              onClick={() =>
+                void act("review_host", item, { id, status: "inactive" })
+              }
+              disabled={disabled}
+            >
+              Make inactive
+            </button>
+            <button
+              onClick={() =>
+                void act("review_host", item, { id, status: "archived" })
+              }
+              disabled={disabled}
+            >
+              Delete Host
+            </button>
+          </div>
+        );
       return (
         <div className="record-actions">
           <button
