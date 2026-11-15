@@ -2297,6 +2297,7 @@ function RecordDetails({
       ? (item.bank_account as Record<string, unknown>)
       : {};
   const isReport = section === "Reports";
+  const isPhotoReview = item.record_type === "profile_photo_review";
   const isDeletionRequest = section === "Account deletions";
   const rows: [string, unknown][] =
     section === "Audit log"
@@ -2331,6 +2332,13 @@ function RecordDetails({
             ["Scheduled for", formatDateTime(String(item.scheduled_for || ""))],
             ["Last reviewed", formatDateTime(String(item.reviewed_at || ""))],
             ["Review note", item.review_note],
+          ]
+        : isPhotoReview
+        ? [
+            ["Member phone", item.owner_phone],
+            ["Review status", "Waiting for manual photo-safety review"],
+            ["Submitted", formatDateTime(String(item.created_at || ""))],
+            ["Review note", item.details],
           ]
         : isReport
         ? [
@@ -2462,6 +2470,8 @@ function RecordDetails({
     );
   const avatar =
     typeof profile.avatar_url === "string" ? profile.avatar_url : "";
+  const previewUrl =
+    typeof item.preview_url === "string" ? item.preview_url : "";
   const notes = Array.isArray(item.moderation_notes)
     ? (item.moderation_notes as Record<string, unknown>[])
     : [];
@@ -2475,6 +2485,15 @@ function RecordDetails({
       <summary>{open ? "Record details" : "View details"}</summary>
       <div className="detail-card">
         {avatar && <img src={avatar} alt="Profile" />}
+        {isPhotoReview && previewUrl && (
+          <img
+            className="moderation-photo-preview"
+            src={previewUrl}
+            alt="Private Host profile photo awaiting review"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        )}
         <dl>
           {rows.map(([label, value]) => (
             <div key={label}>
@@ -2650,7 +2669,8 @@ function LiveWorkspace({
     const interval =
       (section === "Hosts" ||
         section === "Users" ||
-        section === "Account deletions") &&
+        section === "Account deletions" ||
+        section === "Reports") &&
       hasLoaded
         ? window.setInterval(() => void load(), 30000)
         : null;
@@ -2722,7 +2742,9 @@ function LiveWorkspace({
       : {};
   const title = (item: Record<string, unknown>) =>
     String(
-      section === "Support"
+      item.record_type === "profile_photo_review"
+        ? "Host profile photo"
+        : section === "Support"
         ? item.subject || profile(item).display_name || item.phone || item.id
         : profile(item).display_name ||
             item.display_name ||
@@ -2734,6 +2756,8 @@ function LiveWorkspace({
             item.id,
     );
   const detail = (item: Record<string, unknown>) => {
+    if (item.record_type === "profile_photo_review")
+      return "Needs manual photo review";
     const value = String(
       item.status ||
         item.account_status ||
@@ -3035,6 +3059,34 @@ function LiveWorkspace({
       );
     }
     if (section === "Reports") {
+      if (item.record_type === "profile_photo_review") {
+        const review = (decision: "approved" | "rejected") => {
+          const note = window
+            .prompt(
+              `${decision === "approved" ? "Approval" : "Rejection"} note (required):`,
+            )
+            ?.trim();
+          if (!note) return;
+          void act(
+            "review_profile_photo",
+            item,
+            { id, decision, note },
+            decision === "approved"
+              ? "Host photo approved. The member can submit the application again."
+              : "Host photo rejected. The member must choose another photo.",
+          );
+        };
+        return (
+          <div className="record-actions">
+            <button onClick={() => review("approved")} disabled={disabled}>
+              Approve photo
+            </button>
+            <button onClick={() => review("rejected")} disabled={disabled}>
+              Reject photo
+            </button>
+          </div>
+        );
+      }
       const status = String(item.status || "");
       if (["Resolved", "Rejected"].includes(status))
         return <span className="action-complete">{status}</span>;
@@ -3209,7 +3261,7 @@ function LiveWorkspace({
           </button>
         </div>
       );
-    if (section === "Reports")
+    if (section === "Reports" && item.record_type !== "profile_photo_review")
       return (
         <div className="record-actions">
           <button
