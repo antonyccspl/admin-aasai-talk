@@ -2469,7 +2469,13 @@ function RecordDetails({
       ["Resolved", formatDateTime(String(item.resolved_at || ""))],
     );
   const avatar =
-    typeof profile.avatar_url === "string" ? profile.avatar_url : "";
+    typeof application.photo_preview_url === "string"
+      ? application.photo_preview_url
+      : typeof application.photo === "string"
+        ? application.photo
+        : typeof profile.avatar_url === "string"
+          ? profile.avatar_url
+          : "";
   const previewUrl =
     typeof item.preview_url === "string" ? item.preview_url : "";
   const notes = Array.isArray(item.moderation_notes)
@@ -3910,6 +3916,7 @@ function HostOnboardingModal({
     item.bank_account && typeof item.bank_account === "object"
       ? (item.bank_account as Record<string, unknown>)
       : {};
+  const hasExistingApplication = typeof item.status === "string" && item.status !== "new";
   const [pan, setPan] = useState("");
   const [aadhaar, setAadhaar] = useState("");
   const [holder, setHolder] = useState(String(existing.account_holder_name || ""));
@@ -3920,7 +3927,7 @@ function HostOnboardingModal({
   const [account, setAccount] = useState(String(existing.account_number || ""));
   const [ifsc, setIfsc] = useState(String(existing.ifsc_code || ""));
   const [verified, setVerified] = useState(existing.status === "verified");
-  const [approve, setApprove] = useState(true);
+  const [approve, setApprove] = useState(!hasExistingApplication);
   const [saveError, setSaveError] = useState("");
   const ready =
     /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan.trim()) &&
@@ -4100,14 +4107,16 @@ function HostOnboardingModal({
             />{" "}
             I have verified this payout destination with the Host.
             </label>
-            <label className="payout-confirm-check">
-            <input
-              type="checkbox"
-              checked={approve}
-              onChange={(event) => setApprove(event.target.checked)}
-            />{" "}
-            Approve this member as a Host now.
-            </label>
+            {!hasExistingApplication && (
+              <label className="payout-confirm-check">
+                <input
+                  type="checkbox"
+                  checked={approve}
+                  onChange={(event) => setApprove(event.target.checked)}
+                />{" "}
+                Approve this member as a Host now.
+              </label>
+            )}
           </section>
           {saveError && (
             <p className="login-message" role="alert">
@@ -4252,7 +4261,7 @@ function InstagramHostModal({
   if (!/^\d{12}$/.test(normalizedAadhaar)) validationErrors.push("12-digit Aadhaar number");
   if (holder.trim().length < 2 || holder.trim().length > 120) validationErrors.push("payout account holder name (2–120 characters)");
   if (method === "upi") {
-    if (!/^[A-Za-z0-9._-]{2,256}@[A-Za-z][A-Za-z0-9._-]{1,64}$/.test(upi.trim())) validationErrors.push("valid UPI ID");
+    if (!/^[A-Za-z0-9._-]{2,255}@[A-Za-z][A-Za-z0-9._-]{1,64}$/.test(upi.trim())) validationErrors.push("valid UPI ID");
   } else if (!/^\d{9,18}$/.test(normalizedAccount) || !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(normalizedIfsc)) {
     validationErrors.push("valid bank account number and IFSC");
   }

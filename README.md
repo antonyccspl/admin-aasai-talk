@@ -44,10 +44,13 @@ number with the app's OTP flow before signing in.
 Before using this flow in production, apply
 `../aasai-talk/supabase/migrations/20261013000100_admin_instagram_host_enrollment.sql`
 and deploy the updated `admin-portal` Edge Function from the app repository.
-Deploy both `admin-portal` and `content-moderation` so they use the shared
-photo-safety scanner. Rejected photos cannot be overridden; photos needing
-manual review can be published only after the Super Admin confirms that the
-photo meets the Host photo-safety rules.
+For member-submitted Host applications, also apply
+`../aasai-talk/supabase/migrations/20261115000500_host_application_photo_review.sql`
+and deploy the updated `admin-portal` and `content-moderation` functions. These
+applications appear in **Hosts** immediately; admins review the profile and
+private photo together, and the photo is published only when the Host is
+approved. Admin-created Instagram Hosts still require their existing manual
+photo-safety attestation.
 
 ## Live online members
 
