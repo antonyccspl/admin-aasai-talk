@@ -3361,12 +3361,16 @@ function LiveWorkspace({
             setError("");
             setNotice("");
             try {
-              await adminMultipartRequest(session, "create_instagram_host", submission);
+              const result = await adminMultipartRequest(session, "create_instagram_host", submission);
               await load();
-              setNotice(
+              const saveMessage =
                 submission.payload.approve === true
                   ? "Instagram Host profile created and approved."
-                  : "Instagram Host profile created for review.",
+                  : "Instagram Host profile created for review.";
+              setNotice(
+                result.photo_scan_fallback === true
+                  ? `${saveMessage} Google Vision billing is disabled, so the photo was handled through your required manual safety review.`
+                  : saveMessage,
               );
               setCreatingInstagramHost(false);
             } finally {
