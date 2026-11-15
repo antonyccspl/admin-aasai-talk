@@ -2870,7 +2870,7 @@ function LiveWorkspace({
     const disabled = saving === id;
     if (section === "Hosts") {
       const status = String(item.status || "");
-      if (status === "new")
+      if (status === "new" && canCreateHost)
         return (
           <div className="record-actions">
             <button
@@ -2884,12 +2884,14 @@ function LiveWorkspace({
       if (status === "pending")
         return (
           <div className="record-actions">
-            <button
-              onClick={() => setHostAssistTarget(item)}
-              disabled={disabled}
-            >
-              Update details
-            </button>
+            {canCreateHost && (
+              <button
+                onClick={() => setHostAssistTarget(item)}
+                disabled={disabled}
+              >
+                Update details
+              </button>
+            )}
             <button
               onClick={() =>
                 void act("review_host", item, { id, status: "approved" })
