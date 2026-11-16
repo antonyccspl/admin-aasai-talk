@@ -127,3 +127,14 @@ h2 { font-size: 20px; }
 @media (max-width: 900px) { .admin-shell { grid-template-columns: 68px minmax(0, 1fr); } .content { padding: 22px 20px 34px; } .sidebar { padding: 18px 9px; } .nav-item { padding: 11px 0; } .report-hero { padding: 19px 21px; } }
 @media (max-width: 760px) { .dashboard-visual { align-items: stretch; grid-template-columns: 1fr; } .dashboard-visual .outline-button { justify-self: start; } }
 @media (max-width: 620px) { .admin-shell { display: block; } .content { padding: 16px 13px 28px; } .topbar { margin-bottom: 16px; } .report-hero { border-radius: 15px; min-height: 0; padding: 18px; } .report-hero h2 { font-size: 25px; } .report-tabs button { padding: 8px 13px; } .report-table { padding: 0 16px; } .report-snapshot-grid article { min-height: 0; padding: 16px; } .live-workspace { padding: 17px; } .offer-intro, .offer-editor, .regular-packs { padding: 18px; } }
+
+.payment-status-guide, .payment-status-explanation { border: 1px solid #eadfd8; border-radius: 10px; display: grid; gap: 5px; padding: 11px 13px; }
+.payment-status-guide { background: #fffaf0; margin: 12px 0 2px; }
+.payment-status-guide strong, .payment-status-explanation strong { color: #423a37; font-size: 12px; }
+.payment-status-guide span, .payment-status-explanation small { color: #766d68; font-size: 11px; line-height: 1.5; }
+.payment-status-badge { border-radius: 999px; display: inline-flex; font-size: 10px; font-weight: 800; justify-self: start; padding: 5px 9px; }
+.payment-status-badge--success, .payment-status-explanation--success { background: #eaf8ef; border-color: #b7e3c4; color: #17653a; }
+.payment-status-badge--warning, .payment-status-explanation--warning { background: #fff6e3; border-color: #ebd39e; color: #8a5a08; }
+.payment-status-badge--pending, .payment-status-explanation--pending { background: #fffaf0; border-color: #ead9ae; color: #76521a; }
+.payment-status-badge--failed, .payment-status-explanation--failed { background: #fff0f0; border-color: #edb9b9; color: #a82929; }
+.payment-status-explanation { margin-top: 12px; }

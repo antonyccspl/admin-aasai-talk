@@ -2468,6 +2468,57 @@ function formatDate(value: unknown) {
   if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(date);
 }
+function paymentStatus(item: Record<string, unknown>) {
+  const status = String(item.status || "").toLowerCase();
+  const credited = Boolean(item.credited_at);
+  if (status === "captured")
+    return credited
+      ? {
+          label: "Paid · wallet credited",
+          note: "Cashfree confirmed the payment and the coins were added to the wallet.",
+          tone: "success",
+        }
+      : {
+          label: "Paid · wallet credit pending",
+          note: "Cashfree captured the payment, but the wallet credit is not recorded. Use Credit wallet to reconcile it.",
+          tone: "warning",
+        };
+  if (status === "created")
+    return {
+      label: "Not confirmed",
+      note: "The Cashfree order exists, but no successful payment capture is recorded. Coins have not been credited. If the member reports a debit, verify the payment with Cashfree before taking action.",
+      tone: "pending",
+    };
+  if (status === "authorized")
+    return {
+      label: "Authorized · capture pending",
+      note: "The payment is authorized but not captured yet, so coins have not been credited.",
+      tone: "pending",
+    };
+  if (status === "failed")
+    return {
+      label: "Payment failed",
+      note: "The payment was not completed and no coins were credited.",
+      tone: "failed",
+    };
+  if (status === "expired")
+    return {
+      label: "Order expired",
+      note: "The order expired without a recorded successful capture. No coins were credited.",
+      tone: "failed",
+    };
+  if (status === "refunded")
+    return {
+      label: "Refunded",
+      note: "The order is marked refunded. Review the payment and wallet records before taking further action.",
+      tone: "failed",
+    };
+  return {
+    label: status ? status.replaceAll("_", " ") : "Unknown",
+    note: "Check the payment provider and wallet records before taking action.",
+    tone: "pending",
+  };
+}
 function RecordDetails({
   section,
   item,
@@ -2604,12 +2655,18 @@ function RecordDetails({
     );
   if (section === "Payments")
     rows.push(
+      ["Payment status", paymentStatus(item).label],
       ["Coins", item.coins],
       ["Amount", `₹${Number(item.amount_paise || 0) / 100}`],
       ["Cashfree order", item.provider_order_id],
-      ["Cashfree payment", item.provider_payment_id || "Not paid"],
-      ["Captured", formatDateTime(String(item.captured_at || ""))],
-      ["Wallet credited", formatDateTime(String(item.credited_at || ""))],
+      ["Cashfree payment reference", item.provider_payment_id || "Not recorded"],
+      ["Payment captured at", formatDateTime(String(item.captured_at || ""))],
+      [
+        "Wallet credit",
+        item.credited_at
+          ? `Credited at ${formatDateTime(String(item.credited_at))}`
+          : "Not credited",
+      ],
     );
   if (section === "Payouts" || section === "Hosts") {
     const method = account.payout_method === "upi" ? "UPI ID" : "Bank account";
@@ -2751,6 +2808,12 @@ function RecordDetails({
             ) : (
               <small>No messages yet.</small>
             )}
+          </div>
+        )}
+        {section === "Payments" && (
+          <div className={`payment-status-explanation payment-status-explanation--${paymentStatus(item).tone}`}>
+            <strong>{paymentStatus(item).label}</strong>
+            <small>{paymentStatus(item).note}</small>
           </div>
         )}
         {isReport && (
@@ -2993,6 +3056,8 @@ function LiveWorkspace({
             item.id,
     );
   const detail = (item: Record<string, unknown>) => {
+    if (section === "Payments")
+      return `₹${Number(item.amount_paise || 0) / 100} · ${Number(item.coins || 0)} coins`;
     const value = String(
       item.status ||
         item.account_status ||
@@ -3029,6 +3094,20 @@ function LiveWorkspace({
       ? status === "processing"
         ? "In review"
         : status[0].toUpperCase() + status.slice(1)
+      : section === "Payments"
+      ? status === "created"
+        ? "Not confirmed"
+        : status === "authorized"
+          ? "Capture pending"
+          : status === "captured"
+            ? "Captured"
+            : status === "failed"
+              ? "Failed"
+              : status === "expired"
+                ? "Expired"
+                : status === "refunded"
+                  ? "Refunded"
+                  : status
       : section === "Payouts"
       ? status === "pending"
         ? "Pending review"
@@ -3781,6 +3860,16 @@ function LiveWorkspace({
             </button>
           </div>
         </div>
+        {section === "Payments" && (
+          <div className="payment-status-guide">
+            <strong>How to read payment status</strong>
+            <span>
+              Created means payment is not confirmed and coins are not credited.
+              Captured means Cashfree confirmed payment. Wallet credit is tracked
+              separately; only captured payments can be reconciled here.
+            </span>
+          </div>
+        )}
         <div className="workspace-tools">
           <label>
             <span>⌕</span>
@@ -3945,6 +4034,11 @@ function LiveWorkspace({
                       </span>
                     )}
                   </div>
+                  {section === "Payments" && (
+                    <div className={`payment-status-badge payment-status-badge--${paymentStatus(item).tone}`}>
+                      {paymentStatus(item).label}
+                    </div>
+                  )}
                   <span>{detail(item)}</span>
                   {(section === "Hosts" || section === "Users") &&
                     typeof item.last_seen_at === "string" && (
