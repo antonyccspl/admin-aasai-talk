@@ -2342,6 +2342,8 @@ function RecordDetails({
           ]
         : isPhotoReview
         ? [
+            ["Profile name", item.display_name],
+            ["Gender", item.gender],
             ["Member phone", item.owner_phone],
             ["Review status", "Waiting for manual photo-safety review"],
             ["Submitted", formatDateTime(String(item.created_at || ""))],
@@ -2530,7 +2532,7 @@ function RecordDetails({
           <img
             className="moderation-photo-preview"
             src={previewUrl}
-            alt="Private Host profile photo awaiting review"
+            alt="Private profile photo awaiting review"
             loading="lazy"
             referrerPolicy="no-referrer"
           />
@@ -2792,7 +2794,7 @@ function LiveWorkspace({
   const title = (item: Record<string, unknown>) =>
     String(
       item.record_type === "profile_photo_review"
-        ? "Host profile photo"
+        ? `Profile photo · ${item.display_name || "Member"}`
         : section === "Support"
         ? item.subject || profile(item).display_name || item.phone || item.id
         : profile(item).display_name ||
@@ -3187,14 +3189,14 @@ function LiveWorkspace({
             item,
             { id, decision, note },
             decision === "approved"
-              ? "Host photo approved. The member can submit the application again."
-              : "Host photo rejected. The member must choose another photo.",
+              ? "Profile photo approved and published; the member profile was updated."
+              : "Profile photo rejected. The current profile photo remains unchanged.",
           );
         };
         return (
           <div className="record-actions">
             <button onClick={() => review("approved")} disabled={disabled}>
-              Approve photo
+              Approve and publish
             </button>
             <button onClick={() => review("rejected")} disabled={disabled}>
               Reject photo
