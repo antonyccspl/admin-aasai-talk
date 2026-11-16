@@ -17,7 +17,16 @@
 .offer-card span, .offer-card small { color: #766960; }
 .offer-card > div:last-child { display: flex; gap: 8px; }
 .regular-packs { padding: 25px 30px; }
-.regular-packs h2 { margin: 5px 0 15px; }
-.regular-packs > div { align-items: center; border-top: 1px solid #eee3dd; display: flex; justify-content: space-between; padding: 12px 0; }
+.regular-packs-heading { align-items: center; display: flex; gap: 16px; justify-content: space-between; margin-bottom: 15px; }
+.regular-packs-heading h2 { margin: 5px 0 0; }
+.regular-pack-form { background: #fffaf6; border: 1px solid #eee3dd; border-radius: 12px; display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 8px; padding: 18px; }
+.regular-pack-form-heading { grid-column: 1 / -1; }
+.regular-pack-form-heading h3 { margin: 4px 0 0; }
+.regular-pack-form label { color: #514640; display: grid; font-size: 13px; font-weight: 800; gap: 7px; }
+.regular-pack-form input { border: 1px solid #e6dcd6; border-radius: 10px; box-sizing: border-box; font: inherit; height: 42px; padding: 0 11px; width: 100%; }
+.regular-pack-rate { color: #766960; font-size: 13px; grid-column: 1 / -1; margin: 0; }
+.regular-pack-form-actions { display: flex; gap: 8px; grid-column: 1 / -1; justify-content: flex-end; }
+.regular-pack-row { align-items: center; border-top: 1px solid #eee3dd; display: flex; gap: 14px; justify-content: space-between; padding: 12px 0; }
+.regular-pack-actions { display: flex; gap: 8px; }
 @media (max-width: 1050px) { .offer-editor form { grid-template-columns: repeat(2, minmax(0, 1fr)); } .offer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 640px) { .offer-intro { align-items: flex-start; flex-direction: column; padding: 22px; } .offer-editor { padding: 22px; } .offer-editor form, .offer-grid { grid-template-columns: 1fr; } .regular-packs { padding: 22px; } .regular-packs > div { align-items: flex-start; flex-direction: column; gap: 10px; } }
+@media (max-width: 640px) { .offer-intro { align-items: flex-start; flex-direction: column; padding: 22px; } .offer-editor { padding: 22px; } .offer-editor form, .offer-grid, .regular-pack-form { grid-template-columns: 1fr; } .regular-packs { padding: 22px; } .regular-packs-heading { align-items: flex-start; flex-direction: column; } .regular-pack-form-heading, .regular-pack-rate, .regular-pack-form-actions { grid-column: auto; } .regular-pack-form-actions { justify-content: flex-start; } .regular-pack-row { align-items: flex-start; flex-direction: column; gap: 10px; } .regular-pack-actions { flex-wrap: wrap; } }

@@ -68,6 +68,7 @@ type PayoutAction = {
   item: Record<string, unknown>;
   mode: "review" | "complete" | "reject" | "failed";
 };
+const STANDARD_COINS_PER_RUPEE = 1.5;
 
 const navigation: { name: Section; icon: string; count?: string }[] = [
   { name: "Overview", icon: "▦" },
@@ -1415,6 +1416,12 @@ function SpecialOffers({ session }: { session: Session }) {
   const [from, setFrom] = useState("");
   const [until, setUntil] = useState("");
   const [active, setActive] = useState(true);
+  const [standardEditorOpen, setStandardEditorOpen] = useState(false);
+  const [editingStandard, setEditingStandard] =
+    useState<Record<string, unknown> | null>(null);
+  const [standardCoins, setStandardCoins] = useState("");
+  const [standardPrice, setStandardPrice] = useState("");
+  const standardEditorRef = useRef<HTMLFormElement>(null);
   const load = async () => {
     setLoading(true);
     setMessage("");
@@ -1441,6 +1448,59 @@ function SpecialOffers({ session }: { session: Session }) {
     setFrom("");
     setUntil("");
     setActive(true);
+  };
+  const resetStandard = () => {
+    setStandardEditorOpen(false);
+    setEditingStandard(null);
+    setStandardCoins("");
+    setStandardPrice("");
+  };
+  const addStandard = () => {
+    setMessage("");
+    setEditingStandard(null);
+    setStandardCoins("");
+    setStandardPrice("");
+    setStandardEditorOpen(true);
+    window.requestAnimationFrame(() =>
+      standardEditorRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      }),
+    );
+  };
+  const editStandard = (item: Record<string, unknown>) => {
+    const priceValue = Number(item.price_paise || 0) / 100;
+    setMessage("");
+    setEditingStandard(item);
+    setStandardPrice(priceValue.toFixed(2));
+    setStandardCoins(
+      String(Math.round(priceValue * STANDARD_COINS_PER_RUPEE)),
+    );
+    setStandardEditorOpen(true);
+    window.requestAnimationFrame(() =>
+      standardEditorRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      }),
+    );
+  };
+  const updateStandardPrice = (value: string) => {
+    setStandardPrice(value);
+    const amount = Number(value);
+    setStandardCoins(
+      value.trim() && Number.isFinite(amount) && amount > 0
+        ? String(Math.round(amount * STANDARD_COINS_PER_RUPEE))
+        : "",
+    );
+  };
+  const updateStandardCoins = (value: string) => {
+    setStandardCoins(value);
+    const coins = Number(value);
+    setStandardPrice(
+      value.trim() && Number.isSafeInteger(coins) && coins > 0
+        ? (coins / STANDARD_COINS_PER_RUPEE).toFixed(2)
+        : "",
+    );
   };
   const edit = (item: Record<string, unknown>) => {
     setEditing(item);
@@ -1482,6 +1542,55 @@ function SpecialOffers({ session }: { session: Session }) {
     } catch (cause) {
       setMessage(
         cause instanceof Error ? cause.message : "Unable to save offer.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+  const saveStandard = async (event: FormEvent) => {
+    event.preventDefault();
+    const coinsValue = Number(standardCoins);
+    const priceValue = Number(standardPrice);
+    const pricePaise = Math.round(priceValue * 100);
+    const isValid =
+      Number.isSafeInteger(coinsValue) &&
+      coinsValue > 0 &&
+      coinsValue <= 2147483647 &&
+      Number.isSafeInteger(pricePaise) &&
+      pricePaise > 0 &&
+      pricePaise <= 2147483647 &&
+      Math.abs(priceValue * 100 - pricePaise) < 1e-8 &&
+      Math.round((pricePaise * STANDARD_COINS_PER_RUPEE) / 100) ===
+        coinsValue;
+    if (!isValid) {
+      setMessage("Enter a whole coin amount and a valid price.");
+      return;
+    }
+    const wasEditing = Boolean(editingStandard);
+    let saved = false;
+    setSaving(true);
+    setMessage("");
+    try {
+      await adminRequest(session, "save_standard_coin_pack", {
+        id:
+          typeof editingStandard?.id === "string"
+            ? editingStandard.id
+            : undefined,
+        coins: coinsValue,
+        price_paise: pricePaise,
+      });
+      saved = true;
+      const result = await adminRequest(session, "list_coin_packs");
+      setPacks(result.items || []);
+      resetStandard();
+      setMessage(wasEditing ? "Normal pack updated." : "Normal pack created.");
+    } catch (cause) {
+      setMessage(
+        saved
+          ? "Pack saved, but the list could not be refreshed. Reload to confirm the catalog."
+          : cause instanceof Error
+            ? cause.message
+            : "Unable to save normal pack.",
       );
     } finally {
       setSaving(false);
@@ -1666,21 +1775,111 @@ function SpecialOffers({ session }: { session: Session }) {
             )}
           </section>
           <section className="panel regular-packs">
-            <p className="eyebrow">STANDARD COIN PACKS</p>
-            <h2>Normal wallet packs</h2>
+            <div className="regular-packs-heading">
+              <div>
+                <p className="eyebrow">STANDARD COIN PACKS</p>
+                <h2>Normal wallet packs</h2>
+              </div>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={addStandard}
+                disabled={saving}
+              >
+                Add normal pack
+              </button>
+            </div>
+            {standardEditorOpen && (
+              <form
+                ref={standardEditorRef}
+                className="regular-pack-form"
+                onSubmit={(event) => void saveStandard(event)}
+              >
+                <div className="regular-pack-form-heading">
+                  <p className="eyebrow">
+                    {editingStandard ? "EDIT NORMAL PACK" : "NEW NORMAL PACK"}
+                  </p>
+                  <h3>
+                    {editingStandard ? "Update normal pack" : "Create normal pack"}
+                  </h3>
+                </div>
+                <label>
+                  <span>Coins</span>
+                  <input
+                    value={standardCoins}
+                    onChange={(event) => updateStandardCoins(event.target.value)}
+                    type="number"
+                    min="1"
+                    max="2147483647"
+                    step="1"
+                    required
+                    disabled={saving}
+                  />
+                </label>
+                <label>
+                  <span>Price (₹)</span>
+                  <input
+                    value={standardPrice}
+                    onChange={(event) => updateStandardPrice(event.target.value)}
+                    type="number"
+                    min="0.01"
+                    max="21474836.47"
+                    step="0.01"
+                    required
+                    disabled={saving}
+                  />
+                </label>
+                <p className="regular-pack-rate">
+                  Rate: {STANDARD_COINS_PER_RUPEE} coins per ₹1. Prices round
+                  to paise and coins to whole numbers. Existing packs load coins
+                  from their price; new packs are active by default, and edits
+                  preserve their current status.
+                </p>
+                <div className="regular-pack-form-actions">
+                  <button
+                    type="button"
+                    className="outline-button"
+                    onClick={resetStandard}
+                    disabled={saving}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="primary-button"
+                    type="submit"
+                    disabled={saving}
+                  >
+                    {saving
+                      ? "Saving…"
+                      : editingStandard
+                        ? "Save pack"
+                        : "Create pack"}
+                  </button>
+                </div>
+              </form>
+            )}
             {regular.map((item) => (
-              <div key={String(item.id)}>
+              <div className="regular-pack-row" key={String(item.id)}>
                 <span>
                   {Number(item.coins || 0).toLocaleString("en-IN")} coins · ₹
                   {Number(item.price_paise || 0) / 100}
                 </span>
-                <button
-                  className="outline-button"
-                  onClick={() => void toggle(item)}
-                  disabled={saving}
-                >
-                  {item.active ? "Deactivate" : "Activate"}
-                </button>
+                <div className="regular-pack-actions">
+                  <button
+                    className="outline-button"
+                    onClick={() => editStandard(item)}
+                    disabled={saving}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="outline-button"
+                    onClick={() => void toggle(item)}
+                    disabled={saving}
+                  >
+                    {item.active ? "Deactivate" : "Activate"}
+                  </button>
+                </div>
               </div>
             ))}
           </section>
