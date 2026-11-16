@@ -2724,6 +2724,15 @@ function RecordDetails({
             </div>
           ))}
         </dl>
+        {isReport && (
+          <div className="moderation-timeline">
+            <strong>Review scope</strong>
+            <small>
+              Review the details submitted with this report. The app does not
+              record or store one-to-one call audio or video.
+            </small>
+          </div>
+        )}
         {section === "Support" && (
           <div className="moderation-timeline">
             <strong>Conversation</strong>
